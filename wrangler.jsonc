@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "navi",
+  "main": "worker/index.js",
+  "compatibility_date": "2025-04-05",
+  "assets": {
+    "directory": "frontend",
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "navigation-db",
+      "database_id": "9af663c9-c5e0-477b-b872-6090c8e65430"
+    }
+  ],
+  "vars": {
+    "AUTH_ENABLED": "true",
+    "AUTH_REQUIRED_FOR_READ": "false"
+  }
+}
