@@ -1,64 +1,51 @@
-# navi
+# Navi
 
-个人导航站（`https://dh.kazerush.xyz`）。本仓库是**从线上产物反编译恢复**的可部署版本，由 xuzhang0807-cmd 自行维护。
+个人导航站。当前分支为本地维护与 UI 评审分支：`feat/legacy-structure-privacy-ui`。所有改动仅在本地仓库，不包含发布动作。
 
-## 目录
+## 结构
 
+```text
+src/                    React + TypeScript 源码
+worker/index.js         Cloudflare Worker API
+migrations/             D1 本地 schema 基线
+frontend/               Vite 静态构建输出（Worker assets）
+legacy-build/frontend/  旧版静态页面备份，只作对照/回滚
+tests/                  Worker API 回归测试
+docs/architecture.md    数据可见性与本地开发约定
+wrangler.jsonc          既有 Worker / D1 配置（仍含原有数据库绑定）
 ```
-worker/index.js            线上 Worker 原样代码（可直接部署）
-decompiled/worker.pretty.js  同上，格式化后便于阅读（约 3600 行）
-frontend/                  线上前端构建产物（Vite + React + MUI，SPA）
-decompiled/frontend.pretty.js 前端 bundle 的格式化版本，仅供阅读/搜索
-wrangler.jsonc             部署配置（D1、静态资源、非敏感变量）
-```
 
-## 部署
+## 本地预览
 
 ```bash
-export CLOUDFLARE_API_TOKEN=***
-export CLOUDFLARE_ACCOUNT_ID=fd9b33852a00a5909b8b15745426e3fe
-npx wrangler@4 deploy
+pnpm install
+pnpm dev:demo       # 只使用虚构演示内容与浏览器 localStorage
+pnpm test
+pnpm build
 ```
 
-敏感变量（不进仓库）：
+`pnpm dev:demo` 不请求 `/api`，不读取线上数据；页面内的编辑、收藏与公开/私密切换仅写入当前浏览器的演示存储。通过 `?preview=admin` 可查看完整管理模式，例如：`http://localhost:5173/?preview=admin`。
 
-```bash
-npx wrangler secret put AUTH_USERNAME
-npx wrangler secret put AUTH_PASSWORD   # 明文或 bcrypt 均可
-npx wrangler secret put AUTH_SECRET
-```
+若需验证 Worker，请另开终端运行 `pnpm dev:worker`，Wrangler 会在本地模拟 Worker 与 D1；不要加 `--remote`。脚本未提供部署命令。`wrangler.jsonc` 保留既有 D1 绑定，任何迁移、配置变更或上线均需在 UI 截图通过后单独审查和确认。
 
-## 后端接口（Worker 内实现，前缀 `/api/`）
+## 可见性与分类
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| POST | `/api/login` | 用户名密码换 token |
-| POST | `/api/logout` | 注销 |
-| GET | `/api/auth/status` | 登录态检查 |
-| GET | `/api/init` | 首次初始化建表 |
-| GET/POST/PUT/DELETE | `/api/groups`、`/api/groups/{id}` | 分组 CRUD |
-| GET | `/api/groups-with-sites` | 分组+站点聚合（首页用） |
-| PUT | `/api/group-orders` | 分组排序 |
-| GET/POST/PUT/DELETE | `/api/sites`、`/api/sites/{id}` | 站点 CRUD |
-| PUT | `/api/site-orders` | 站点排序 |
-| GET/POST/PUT/DELETE | `/api/configs`、`/api/configs/{key}` | 站点配置 |
-| GET | `/api/export` | 导出 `navhive-data.json` |
-| POST | `/api/import` | 导入数据 |
-| GET/POST/DELETE | `/api/preferences/favorites` | 收藏（按 user 标识） |
-| GET/POST | `/api/preferences/settings` | 偏好设置 |
-| GET/POST | `/api/preferences/visits` | 最近访问 |
-| POST | `/api/preferences/migrate` | 本地偏好迁移 |
+导航分组就是一级分类；站点通过 `group_id` 归属分类，二者均以 `is_public`（1 公开、0 私密）控制可见性。访客只会得到公开分类中的公开站点，登录管理员可以查看完整列表并编辑。`description` 是可公开介绍，`notes` 是管理员私密备注，不应出现在游客接口响应中。
 
-鉴权：`Authorization: Bearer <token>`；`AUTH_ENABLED=true` 时非登录接口需要 token。
+本版本依旧是单管理员导航站，不是多租户产品。收藏和最近访问通过 `X-Device-ID` 为访客保持设备级归属，登录状态则按管理员用户名归属。
 
-## 数据结构（D1 `navigation-db`）
+## 后端 API
 
-- `groups(id, name, order_num, created_at, updated_at)`
-- `sites(id, group_id, name, url, icon, description, notes, order_num, created_at, updated_at)`
-- `configs(key, value, created_at, updated_at)`
+- `GET /api/groups-with-sites`：公开或认证后的分组 + 站点列表。
+- `POST /api/login`、`POST /api/logout`、`GET /api/auth/status`：管理登录与状态。
+- `/api/groups`、`/api/sites`：分类/站点 CRUD；写入操作需要管理员认证。
+- `/api/preferences/favorites`：用户收藏。
+- `/api/preferences/visits`、`/api/preferences/settings`：最近访问与显示偏好。
 
-## 说明
+公开接口的安全边界必须由 Worker 实施，不能只依赖前端隐藏私密内容。本分支增加了公开响应不返回 `notes` 的修正和 API 回归测试。
 
-- 前端是压缩后的构建产物，没有原始 TSX 源码；改 UI 需要重写对应部分，或直接换前端。
-- `decompiled/*.pretty.js` 只用于阅读，不要用来部署。
-- 旧版没有 `is_public` / 收藏 / 偏好等新特性，接口契约见上表。
+## 生产数据库注意事项
+
+新加的 `migrations/0001_local_schema.sql` 是本地/新建 D1 的基线，不适合直接套到既有生产库；上线前必须先确认现有 schema 与历史迁移状态。旧配置的 `wrangler.jsonc` 仍绑定原有 Cloudflare D1，开发时只能使用 Wrangler 默认本地模拟，不得使用 `--remote`。部署暂不在本分支执行。
+
+本地 Worker 若要验证收藏/最近访问接口，先运行 `pnpm db:migrate:local`；该脚本显式使用 `--local` 和 `.wrangler-local/`。`decompiled/` 中的 pretty 文件是历史阅读副本，不是可维护或部署源码；修改以 `src/` 与 `worker/index.js` 为准。

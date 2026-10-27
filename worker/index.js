@@ -2459,7 +2459,8 @@ const READ_ONLY_ROUTES = [
   { method: "GET", path: "/api/groups" },
   { method: "GET", path: "/api/sites" },
   { method: "GET", path: "/api/configs" },
-  { method: "GET", path: "/api/groups-with-sites" }
+  { method: "GET", path: "/api/groups-with-sites" },
+  { method: "GET", path: "/api/visitor-location" }
 ];
 function generateErrorId() {
   return crypto.randomUUID();
@@ -2813,12 +2814,21 @@ const index = {
             });
           }
         }
+        if (path === "visitor-location" && method === "GET") {
+          const rawCity = request.cf && typeof request.cf.city === "string" ? request.cf.city : "";
+          const city = rawCity.trim().replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 64) || null;
+          return createJsonResponse({ city }, request, {
+            headers: { "Cache-Control": "private, no-store" }
+          });
+        }
         if (path === "groups-with-sites" && method === "GET") {
           const groupsWithSites = await api.getGroupsWithSites();
           if (!isAuthenticated) {
             const filteredGroups = groupsWithSites.filter((group) => group.is_public === 1).map((group) => ({
               ...group,
-              sites: group.sites.filter((site) => site.is_public === 1)
+              sites: group.sites
+                .filter((site) => site.is_public === 1)
+                .map(({ notes: _privateNotes, ...site }) => site)
             }));
             return createJsonResponse(filteredGroups, request);
           }
@@ -2926,7 +2936,11 @@ const index = {
           }
           query += " ORDER BY s.group_id ASC, s.order_num ASC";
           const result = await env.DB.prepare(query).bind(...params).all();
-          return createJsonResponse(result.results || [], request);
+          const sites = result.results || [];
+          const visibleSites = isAuthenticated
+            ? sites
+            : sites.map(({ notes: _privateNotes, ...site }) => site);
+          return createJsonResponse(visibleSites, request);
         } else if (path.startsWith("sites/") && method === "GET") {
           const idStr = path.split("/")[1];
           if (!idStr) {
