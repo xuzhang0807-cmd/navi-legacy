@@ -2,7 +2,7 @@
 
 ## 项目边界
 
-此分支将原先“仅保留 Worker 与压缩前端产物”的仓库，逐步整理为可维护结构：`src/` 放 React + TypeScript 页面，`worker/` 放 Cloudflare Worker API，`migrations/` 放 D1 schema，`tests/` 放自动化回归测试，`frontend/` 是可重新生成的静态构建产物。`legacy-build/frontend/` 只保留旧版静态资源供对照与回滚。
+仓库结构：`src/` 放 React + TypeScript 页面，`worker/` 放 Cloudflare Worker API，`migrations/` 放 D1 schema，`tests/` 放自动化回归测试，`frontend/` 是 Wrangler `assets.directory` 指向的静态构建产物（随提交入库，因为仓库没有 CI 重建）。原 `decompiled/` 与 `legacy-build/` 是历史阅读副本与旧版备份，已移出 Git 跟踪，只在本地 `.local-archive/` 或 `faee7fc` 及更早的提交里查阅。
 
 本仓库的 `wrangler.jsonc` 仍保留既有 D1 绑定。开发预览必须使用 `pnpm dev:demo`（只读写浏览器本地演示数据），或使用 `pnpm dev:worker`（Wrangler 本地 Worker / 本地 D1）；不要加 `--remote`，不要运行任何部署命令。演示环境与旧站数据完全隔离。
 
@@ -26,7 +26,10 @@ pnpm install
 pnpm dev:demo       # 本地演示 UI，不调用 /api，也不读取线上数据
 pnpm test           # Worker 公开字段边界测试
 pnpm build          # TypeScript 检查 + 静态构建到 frontend/
+git checkout -- frontend/   # 构建后还原产物，避免无关 hash 变更混入提交
 ```
+
+依赖需 pnpm 10.x（`pnpm-lock.yaml` 为 `lockfileVersion: '9.0'`）。若系统 pnpm 版本不符，用 `corepack prepare pnpm@10.18.3 --activate` 固定版本，不要改动 lockfile。
 
 需要本地 Worker 时另开终端运行 `pnpm dev:worker`，再在另一个终端使用 `pnpm dev`。本地数据迁移命令必须显式加 `--local`。`pnpm` 脚本没有部署入口；上线需在用户检查截图并明确确认之后另行处理。
 
