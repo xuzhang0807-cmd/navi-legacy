@@ -1,6 +1,6 @@
 # Navi
 
-个人导航站。当前分支为本地维护与 UI 评审分支：`feat/legacy-structure-privacy-ui`。所有改动仅在本地仓库，不包含发布动作。
+个人导航站。默认分支为 `master`；本地开发在功能分支上进行，改动经 PR 合并。仓库本身不包含发布动作。
 
 ## 结构
 
@@ -8,12 +8,13 @@
 src/                    React + TypeScript 源码
 worker/index.js         Cloudflare Worker API
 migrations/             D1 本地 schema 基线
-frontend/               Vite 静态构建输出（Worker assets）
-legacy-build/frontend/  旧版静态页面备份，只作对照/回滚
+frontend/               Vite 静态构建输出（Worker assets，随提交入库）
 tests/                  Worker API 回归测试
 docs/architecture.md    数据可见性与本地开发约定
 wrangler.jsonc          既有 Worker / D1 配置（仍含原有数据库绑定）
 ```
+
+历史阅读副本与旧版静态备份（原 `decompiled/`、`legacy-build/`）已移出跟踪，见下文「历史产物」。
 
 ## 本地预览
 
@@ -48,4 +49,14 @@ pnpm build
 
 新加的 `migrations/0001_local_schema.sql` 是本地/新建 D1 的基线，不适合直接套到既有生产库；上线前必须先确认现有 schema 与历史迁移状态。旧配置的 `wrangler.jsonc` 仍绑定原有 Cloudflare D1，开发时只能使用 Wrangler 默认本地模拟，不得使用 `--remote`。部署暂不在本分支执行。
 
-本地 Worker 若要验证收藏/最近访问接口，先运行 `pnpm db:migrate:local`；该脚本显式使用 `--local` 和 `.wrangler-local/`。`decompiled/` 中的 pretty 文件是历史阅读副本，不是可维护或部署源码；修改以 `src/` 与 `worker/index.js` 为准。
+本地 Worker 若要验证收藏/最近访问接口，先运行 `pnpm db:migrate:local`；该脚本显式使用 `--local` 和 `.wrangler-local/`。
+
+## 历史产物
+
+`decompiled/`（反编译阅读副本，约 894 KB）与 `legacy-build/`（旧版静态备份，约 661 KB）已移出 Git 跟踪，共减少约 1.55 MB 跟踪体积（2.18 MB → 0.63 MB）。这两份目录自述即为「历史阅读副本」「只作对照/回滚」，不属于可维护或部署源码。
+
+- 查阅：`git show faee7fc:decompiled/worker.pretty.js`，或查看 `faee7fc` 及更早提交的树。
+- 本地对照：已移至 `.local-archive/`（被 `.gitignore` 忽略，不随仓库分发）。
+- 修改以 `src/` 与 `worker/index.js` 为准，不要把归档内容重新提交。
+
+`frontend/` 是例外：它是 Wrangler `assets.directory` 指向的部署产物，仓库没有 CI 重建，因此继续随提交入库。本地执行 `pnpm build` 后如产生新的 hash 文件名，请用 `git checkout -- frontend/` 还原，避免把无关产物变更混入功能提交。

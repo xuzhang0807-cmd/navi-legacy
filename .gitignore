@@ -5,3 +5,8 @@ dist/
 .wrangler-local/
 .env.local
 .DS_Store
+
+# 历史阅读副本与旧版静态备份：已移出跟踪，仅保留在本地 .local-archive/ 供对照。
+# 需要查看时用 git 历史（faee7fc 及更早提交）或本地归档目录，不要重新提交。
+.local-archive/
+*.pretty.js
