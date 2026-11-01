@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Clock3,
   Compass,
-  ExternalLink,
   Folder,
   Globe,
   Languages,
@@ -101,19 +100,17 @@ function SiteCard({
       >
         <SiteAvatar site={site} />
         <div className="site-copy">
-          <h4><span>{site.name}</span><ExternalLink aria-hidden="true" /></h4>
+          <h4><span>{site.name}</span></h4>
           {site.description && <p>{site.description}</p>}
           <span className="site-domain">{site.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
         </div>
       </a>
-      <div className="site-card-footer">
-        {admin && <span className="site-admin-visibility">{isPublic(site.is_public) ? <Globe /> : <LockKeyhole />}{isPublic(site.is_public) ? "公开" : "私密"}</span>}
+      {admin && <div className="site-card-footer">
+        <span className="site-admin-visibility">{isPublic(site.is_public) ? <Globe /> : <LockKeyhole />}{isPublic(site.is_public) ? "公开" : "私密"}</span>
         <div className="site-card-tools">
-          {admin && (
-            <button type="button" aria-label={`编辑 ${site.name}`} title="编辑站点" onClick={() => onEdit(site)}>
-              <Pencil />
-            </button>
-          )}
+          <button type="button" aria-label={`编辑 ${site.name}`} title="编辑站点" onClick={() => onEdit(site)}>
+            <Pencil />
+          </button>
           <button
             type="button"
             className={favorite ? "favorited" : ""}
@@ -125,7 +122,7 @@ function SiteCard({
             <Star fill={favorite ? "currentColor" : "none"} />
           </button>
         </div>
-      </div>
+      </div>}
     </article>
   );
 }
@@ -534,7 +531,6 @@ function App() {
     .filter((group) => activeGroup === null || group.id === activeGroup)
     .filter((group) => group.sites.length > 0 || (isAdmin && activeFilter === "all" && !search.trim())),
   [availableGroups, isAdmin, activeFilter, favorites, recent, search, activeGroup]);
-  const visibleCount = visibleGroups.reduce((sum, group) => sum + group.sites.length, 0);
   const publicCategoryCount = groups.filter((group) => isPublic(group.is_public)).length;
   const publicSiteCount = groups.filter((group) => isPublic(group.is_public)).reduce((sum, group) => sum + group.sites.filter((site) => isPublic(site.is_public)).length, 0);
   const hour = new Date().getHours();
@@ -726,7 +722,6 @@ function App() {
           )}
         </div>
 
-        <footer className="page-footer"><span>{language === "zh" ? `已显示 ${visibleCount} 个网站` : `Showing ${visibleCount} websites`}</span><span className="footer-separator">·</span><span>{isAdmin ? text.adminFooter : text.publicFooter}</span><span className="footer-spacer" />{isAdmin && groups.length > 0 && <button type="button" onClick={() => setDialog({ kind: "group" })}><Plus />新增分类</button>}</footer>
         {!isAdmin && <nav className="visitor-mobile-dock" aria-label={language === "zh" ? "快速选择分类" : "Quick category selector"}>
           <button className={`dock-item ${activeGroup === null && activeFilter === "all" ? "active" : ""}`} type="button" onClick={() => selectGroup(null)} aria-pressed={activeGroup === null && activeFilter === "all"}><span className="dock-icon"><LayoutGrid /></span><span>{text.all}</span></button>
           {categoryList.map((group, index) => <button key={group.id} className={`dock-item ${activeGroup === group.id ? "active" : ""}`} type="button" onClick={() => selectGroup(group.id)} aria-pressed={activeGroup === group.id}><span className={`dock-icon tone-${index % 4}`}><Folder /></span><span>{group.name}</span></button>)}
