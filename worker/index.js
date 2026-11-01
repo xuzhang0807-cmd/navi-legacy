@@ -1648,11 +1648,11 @@ class NavigationAPI {
   }
   // 分组相关 API
   async getGroups() {
-    const result = await this.db.prepare("SELECT id, name, order_num, created_at, updated_at FROM groups ORDER BY order_num").all();
+    const result = await this.db.prepare("SELECT id, name, order_num, is_public, created_at, updated_at FROM groups ORDER BY order_num").all();
     return result.results || [];
   }
   async getGroup(id) {
-    const result = await this.db.prepare("SELECT id, name, order_num, created_at, updated_at FROM groups WHERE id = ?").bind(id).first();
+    const result = await this.db.prepare("SELECT id, name, order_num, is_public, created_at, updated_at FROM groups WHERE id = ?").bind(id).first();
     return result;
   }
   async createGroup(group) {
@@ -1685,7 +1685,7 @@ class NavigationAPI {
     }
     const query = `UPDATE groups SET ${updates.join(
       ", "
-    )} WHERE id = ? RETURNING id, name, order_num, created_at, updated_at`;
+    )} WHERE id = ? RETURNING id, name, order_num, is_public, created_at, updated_at`;
     params.push(id);
     const result = await this.db.prepare(query).bind(...params).all();
     if (!result.results || result.results.length === 0) {
@@ -1700,7 +1700,7 @@ class NavigationAPI {
   }
   // 网站相关 API
   async getSites(groupId) {
-    let query = "SELECT id, group_id, name, url, icon, description, notes, order_num, created_at, updated_at FROM sites";
+    let query = "SELECT id, group_id, name, url, icon, description, notes, order_num, is_public, created_at, updated_at FROM sites";
     const params = [];
     if (groupId !== void 0) {
       query += " WHERE group_id = ?";
@@ -1772,7 +1772,7 @@ class NavigationAPI {
   }
   async getSite(id) {
     const result = await this.db.prepare(
-      "SELECT id, group_id, name, url, icon, description, notes, order_num, created_at, updated_at FROM sites WHERE id = ?"
+      "SELECT id, group_id, name, url, icon, description, notes, order_num, is_public, created_at, updated_at FROM sites WHERE id = ?"
     ).bind(id).first();
     return result;
   }
@@ -1828,7 +1828,7 @@ class NavigationAPI {
     }
     const query = `UPDATE sites SET ${updates.join(
       ", "
-    )} WHERE id = ? RETURNING id, group_id, name, url, icon, description, notes, order_num, created_at, updated_at`;
+    )} WHERE id = ? RETURNING id, group_id, name, url, icon, description, notes, order_num, is_public, created_at, updated_at`;
     params.push(id);
     const result = await this.db.prepare(query).bind(...params).all();
     if (!result.results || result.results.length === 0) {
@@ -1921,6 +1921,7 @@ class NavigationAPI {
       for (const group of data.groups) {
         const existingGroup = await this.getGroupByName(group.name);
         if (existingGroup) {
+          await this.updateGroup(existingGroup.id, { is_public: group.is_public ?? 0 });
           if (group.id) {
             groupMap.set(group.id, existingGroup.id);
           }
@@ -1928,7 +1929,8 @@ class NavigationAPI {
         } else {
           const newGroup = await this.createGroup({
             name: group.name,
-            order_num: group.order_num
+            order_num: group.order_num,
+            is_public: group.is_public ?? 0
           });
           if (group.id && newGroup.id) {
             groupMap.set(group.id, newGroup.id);
@@ -1949,7 +1951,8 @@ class NavigationAPI {
             name: site.name,
             icon: site.icon,
             description: site.description,
-            notes: site.notes
+            notes: site.notes,
+            is_public: site.is_public ?? 0
             // 不更新order_num以保持现有排序
           });
           stats.sites.updated++;
@@ -1958,7 +1961,8 @@ class NavigationAPI {
             ...site,
             id: void 0,
             // 不使用旧ID
-            group_id: newGroupId
+            group_id: newGroupId,
+            is_public: site.is_public ?? 0
           });
           stats.sites.created++;
         }
@@ -1982,13 +1986,13 @@ class NavigationAPI {
   }
   // 根据名称查询分组
   async getGroupByName(name) {
-    const result = await this.db.prepare("SELECT id, name, order_num, created_at, updated_at FROM groups WHERE name = ?").bind(name).first();
+    const result = await this.db.prepare("SELECT id, name, order_num, is_public, created_at, updated_at FROM groups WHERE name = ?").bind(name).first();
     return result;
   }
   // 查询特定分组下是否已存在指定URL的站点
   async getSiteByGroupIdAndUrl(groupId, url) {
     const result = await this.db.prepare(
-      "SELECT id, group_id, name, url, icon, description, notes, order_num, created_at, updated_at FROM sites WHERE group_id = ? AND url = ?"
+      "SELECT id, group_id, name, url, icon, description, notes, order_num, is_public, created_at, updated_at FROM sites WHERE group_id = ? AND url = ?"
     ).bind(groupId, url).first();
     return result;
   }
@@ -2578,6 +2582,10 @@ function validateExportData(data) {
   }
   return { valid: errors.length === 0, errors };
 }
+function isLocalHttp(request) {
+  const url = new URL(request.url);
+  return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+}
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://localhost:8788"
@@ -2588,14 +2596,14 @@ function getCorsHeaders(request) {
   const requestUrl = new URL(request.url);
   let allowedOrigin = null;
   if (origin) {
-    const isAllowed = ALLOWED_ORIGINS.includes(origin) || origin.endsWith(".workers.dev") || origin === requestUrl.origin;
+    const isAllowed = ALLOWED_ORIGINS.includes(origin) || origin === requestUrl.origin;
     allowedOrigin = isAllowed ? origin : null;
   }
-  const finalOrigin = allowedOrigin || ALLOWED_ORIGINS[0];
   return {
-    "Access-Control-Allow-Origin": finalOrigin,
+    ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin } : {}),
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Device-ID",
+    "Vary": "Origin",
     "Access-Control-Allow-Credentials": "true",
     "Access-Control-Max-Age": "86400"
   };
@@ -2677,7 +2685,7 @@ const index = {
                   "Set-Cookie": [
                     `auth_token=${result.token}`,
                     "HttpOnly",
-                    "Secure",
+                    ...(isLocalHttp(request) ? [] : ["Secure"]),
                     "SameSite=Strict",
                     `Max-Age=${maxAge}`,
                     "Path=/"
@@ -2706,7 +2714,7 @@ const index = {
               "Set-Cookie": [
                 "auth_token=",
                 "HttpOnly",
-                "Secure",
+                ...(isLocalHttp(request) ? [] : ["Secure"]),
                 "SameSite=Strict",
                 "Max-Age=0",
                 "Path=/"
@@ -2996,19 +3004,14 @@ const index = {
               );
             }
           }
-          if (data.icon !== void 0 && data.icon !== "") {
-            let iconUrl = data.icon.trim();
-            if (!/^https?:\/\//i.test(iconUrl) && !/^data:/i.test(iconUrl)) {
-              iconUrl = "https://" + iconUrl;
-            }
+          if (data.icon !== void 0) {
             try {
-              new URL(iconUrl);
-              data.icon = iconUrl;
-            } catch {
+              data.icon = normalizeIcon(data.icon);
+            } catch (error) {
               return createJsonResponse(
                 {
                   success: false,
-                  message: "无效的图标URL格式"
+                  message: error.message
                 },
                 request,
                 { status: 400 }
@@ -3359,6 +3362,28 @@ function validateGroup(data) {
     sanitizedData: errors.length === 0 ? sanitizedData : void 0
   };
 }
+function normalizeIcon(value) {
+  if (typeof value !== "string") throw new Error("图标必须是文字或图片地址");
+  const icon = value.trim();
+  if (!icon) return "";
+  if (/^data:/i.test(icon)) {
+    if (icon.length <= 350000 && /^data:image\/(png|jpe?g|gif|webp|avif|x-icon|vnd\.microsoft\.icon);base64,[a-z\d+/=\r\n]+$/i.test(icon)) return icon;
+    throw new Error("图标必须是 PNG、JPEG、GIF、WebP、AVIF 或 ICO 图片，最大 256 KB");
+  }
+  if (/[\u0000-\u001f\u007f]/.test(icon)) throw new Error("图标内容无效");
+  if (icon.startsWith("/") && !icon.startsWith("//") && !/[\s\\]/.test(icon)) return icon;
+  if (/^https?:\/\//i.test(icon) || icon.startsWith("//") || /[./]/.test(icon)) {
+    try {
+      const input = icon.startsWith("//") ? `https:${icon}` : icon;
+      if (/^[a-z][a-z\d+.-]*:/i.test(input) && !/^https?:\/\//i.test(input) && !/^[^/?#]+:\d+(?:[/?#]|$)/.test(input)) throw new Error();
+      const url = new URL(/^https?:\/\//i.test(input) ? input : `https://${input}`);
+      if (!["http:", "https:"].includes(url.protocol) || !url.hostname || url.username || url.password || /\s/.test(input)) throw new Error();
+      return url.href;
+    } catch { throw new Error("请输入有效的图片地址"); }
+  }
+  if (/^[a-z][a-z\d+.-]*:/i.test(icon) || Array.from(icon).length > 8) throw new Error("图标请使用 8 个字符以内的文字或有效的图片地址");
+  return icon;
+}
 function validateSite(data) {
   const errors = [];
   const sanitizedData = {};
@@ -3387,21 +3412,10 @@ function validateSite(data) {
     }
   }
   if (data.icon !== void 0) {
-    if (typeof data.icon !== "string") {
-      errors.push("图标URL必须是字符串");
-    } else if (data.icon) {
-      let iconUrl = data.icon.trim();
-      if (!/^https?:\/\//i.test(iconUrl) && !/^data:/i.test(iconUrl)) {
-        iconUrl = "https://" + iconUrl;
-      }
-      try {
-        new URL(iconUrl);
-        sanitizedData.icon = iconUrl;
-      } catch {
-        errors.push("无效的图标URL格式");
-      }
-    } else {
-      sanitizedData.icon = "";
+    try {
+      sanitizedData.icon = normalizeIcon(data.icon);
+    } catch (error) {
+      errors.push(error.message);
     }
   }
   if (data.description !== void 0) {

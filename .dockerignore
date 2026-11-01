@@ -1,0 +1,14 @@
+node_modules
+.git
+.dev.vars
+.env
+.env.*
+.wrangler*
+.local-data
+.local-archive
+.tmp
+frontend
+tests
+docs
+scripts
+*.log

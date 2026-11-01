@@ -19,7 +19,6 @@ import {
   Plus,
   Search,
   ShieldCheck,
-  Sparkles,
   Star,
   Sun,
   UserRound,
@@ -40,6 +39,8 @@ import {
   toggleFavorite,
 } from "./api";
 import type { ContentFilter, GroupDraft, InitialData, NavGroup, PublicFlag, Site, SiteDraft } from "./types";
+import { faviconUrl, isImageIcon, normalizeIconInput, normalizeWebsiteUrl } from "./site-icons";
+import { PosterCarousel } from "./PosterCarousel";
 
 type DialogState =
   | { kind: "login" }
@@ -54,14 +55,15 @@ function collectQueryValue(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
 }
 
-function SiteAvatar({ site }: { site: Site }) {
+function SiteAvatar({ site, onImageLoad, onImageError }: { site: Pick<Site, "name" | "icon">; onImageLoad?: () => void; onImageError?: () => void }) {
   const icon = site.icon?.trim() ?? "";
-  const isImage = icon.startsWith("http://") || icon.startsWith("https://") || icon.startsWith("/");
-  if (isImage) {
-    return <span className="site-avatar has-image"><img src={icon} alt="" loading="lazy" /></span>;
+  const [failedIcon, setFailedIcon] = useState("");
+  const image = isImageIcon(icon);
+  if (image && failedIcon !== icon) {
+    return <span className="site-avatar has-image"><img key={icon} src={icon} alt="" loading="lazy" referrerPolicy="no-referrer" onLoad={onImageLoad} onError={() => { setFailedIcon(icon); onImageError?.(); }} /></span>;
   }
-  const fallback = site.name.trim().slice(0, 2).toUpperCase();
-  return <span className="site-avatar has-fallback"><span className="site-avatar-mark">{icon || fallback}</span></span>;
+  const fallback = [...site.name.trim()].slice(0, 2).join("").toUpperCase() || "N";
+  return <span className="site-avatar has-fallback"><span className="site-avatar-mark">{!image && icon ? icon : fallback}</span></span>;
 }
 
 function PrivacyBadge({ value }: { value: PublicFlag }) {
@@ -318,6 +320,7 @@ function SiteDialog({ site, groups, defaultGroupId, onClose, onSave, onDelete }:
   const [description, setDescription] = useState(site?.description ?? "");
   const [notes, setNotes] = useState(site?.notes ?? "");
   const [icon, setIcon] = useState(site?.icon ?? "");
+  const [iconNotice, setIconNotice] = useState("");
   const [groupId, setGroupId] = useState(site?.group_id ?? defaultGroupId ?? groups[0]?.id ?? 0);
   const [visibility, setVisibility] = useState<PublicFlag>(site?.is_public ?? 1);
   const [error, setError] = useState("");
@@ -325,15 +328,18 @@ function SiteDialog({ site, groups, defaultGroupId, onClose, onSave, onDelete }:
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name.trim()) return setError("请填写网站名称。");
-    try { new URL(url.trim()); } catch { return setError("请输入有效的网址，包含 https://。 "); }
+    let websiteUrl: string;
+    let normalizedIcon: string;
+    try { websiteUrl = normalizeWebsiteUrl(url); normalizedIcon = normalizeIconInput(icon); }
+    catch (reason) { return setError(reason instanceof Error ? reason.message : "请检查网址或图标。"); }
     if (!groupId) return setError("请先创建一个分类。");
     setError("");
     setBusy(true);
     const draft: SiteDraft = {
       group_id: Number(groupId),
       name: name.trim(),
-      url: url.trim(),
-      icon: icon.trim(),
+      url: websiteUrl,
+      icon: normalizedIcon,
       description: description.trim(),
       notes: notes.trim(),
       order_num: site?.order_num ?? Math.max(0, ...groups.flatMap((group) => group.sites.map((item) => item.order_num))) + 1,
@@ -346,6 +352,37 @@ function SiteDialog({ site, groups, defaultGroupId, onClose, onSave, onDelete }:
     setBusy(true);
     try { await onDelete(site); onClose(); } catch (reason) { setError(reason instanceof Error ? reason.message : "删除失败。"); setBusy(false); }
   }
+  let previewIcon = "";
+  try { previewIcon = normalizeIconInput(icon); } catch { /* Invalid draft icons use the name until corrected. */ }
+  function getWebsiteIcon() {
+    try {
+      const website = normalizeWebsiteUrl(url);
+      setIcon(faviconUrl(website));
+      setUrl(website);
+      setIconNotice("正在加载网站图标…");
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "请先填写有效的网站地址。");
+    }
+  }
+  function chooseSiteIcon(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/x-icon", "image/vnd.microsoft.icon"].includes(file.type) || file.size > 256 * 1024) {
+      setError("请选择 PNG、JPEG、GIF、WebP、AVIF 或 ICO 图标，最大 256 KB。");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return setError("图标读取失败，请重试。");
+      setIcon(reader.result);
+      setIconNotice("已选择自己的图标");
+      setError("");
+    };
+    reader.onerror = () => setError("图标读取失败，请重试。");
+    reader.readAsDataURL(file);
+  }
   return (
     <ModalFrame title={site ? "编辑网站" : "添加网站"} subtitle="公开介绍会展示给访客；私密备注仅管理员可见。" onClose={onClose}>
       <form className="modal-content" onSubmit={submit}>
@@ -354,7 +391,12 @@ function SiteDialog({ site, groups, defaultGroupId, onClose, onSave, onDelete }:
         <label className="form-field"><span>所属分类</span><select value={groupId} onChange={(event) => setGroupId(Number(event.target.value))}>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}{isPublic(group.is_public) ? " · 公开" : " · 私密"}</option>)}</select></label>
         <label className="form-field"><span>一句介绍 <span className="form-hint">可公开显示</span></span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="这是什么？为什么值得收藏？" maxLength={180} /></label>
         <label className="form-field"><span>私密备注</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="只有登录管理后才能查看" maxLength={500} /></label>
-        <label className="form-field"><span>图标文字或图片地址 <span className="form-hint">可留空</span></span><input value={icon} onChange={(event) => setIcon(event.target.value)} placeholder="例如：F 或 https://…/icon.png" /></label>
+        <div className="site-icon-field">
+          <label className="form-field" htmlFor="site-icon-input"><span>图标文字或图片地址 <span className="form-hint">可留空</span></span></label>
+          <div className="site-icon-input-row"><input id="site-icon-input" value={icon} onChange={(event) => { setIcon(event.target.value); setIconNotice(""); }} placeholder="例如：GH 或 https://…/icon.png" /><button className="ghost-button" type="button" onClick={getWebsiteIcon}><Globe />一键获取</button></div>
+          <div className="site-icon-preview-row"><SiteAvatar site={{ name: name || "网站", icon: previewIcon }} onImageLoad={() => setIconNotice("图标已加载")} onImageError={() => setIconNotice("图标加载失败，已使用名称缩写。可填写其他图片地址，或上传自己的图标。")} /><div><span className="site-icon-preview-caption">图标预览</span><p className="site-icon-help">根据网站域名获取图标，也可输入文字、图片地址或上传图片。</p><label className="site-icon-upload"><Camera />上传图标<input type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/x-icon,image/vnd.microsoft.icon" onChange={chooseSiteIcon} /></label></div></div>
+          {iconNotice && <p className="site-icon-notice" role="status">{iconNotice}</p>}
+        </div>
         <div className="form-field"><label>可见范围</label><VisibilityChoice value={visibility} onChange={setVisibility} /></div>
         {error && <div className="form-error" role="alert">{error}</div>}
         <div className="modal-footer">
@@ -607,18 +649,15 @@ function App() {
         )}
         {loadError && !DEMO_MODE && <div className="form-error" role="alert">{loadError} <button type="button" onClick={() => void refresh(true)}>重试</button></div>}
 
-        {isAdmin ? (
-          <section className="page-hero admin-hero">
-            <div className="hero-copy"><div className="hero-eyebrow"><Sparkles /> YOUR CURATED SPACE</div><h1>欢迎回来，{profile.displayName}</h1><p>分类清楚一点，常用的东西就更容易找到。公开给访客的内容，也可以随时调整。</p></div>
-            <div className="hero-side"><span className="view-status"><ShieldCheck />完整管理视图</span><div className="hero-stats"><div className="hero-stat"><strong>{groups.length}</strong><span>个分类</span></div><span className="hero-stat-divider" /><div className="hero-stat"><strong>{groups.reduce((sum, group) => sum + group.sites.length, 0)}</strong><span>个网站</span></div></div></div>
-          </section>
-        ) : (
+        {!isAdmin && (
           <section className="visitor-welcome" aria-label={language === "zh" ? "访客问候" : "A welcome for visitors"}>
             <span className="welcome-mark">{hour < 5 || hour >= 18 ? <Moon /> : <Sun />}</span>
             <div className="welcome-copy"><p className="welcome-eyebrow">{language === "zh" ? "给来访的你，一句问候" : "A LITTLE HELLO FOR YOU"}</p><h1>{welcomeTitle}</h1><p>{text.wish}</p></div>
             <div className="welcome-stats"><span><strong>{publicCategoryCount}</strong><small>{text.statsCategories}</small></span><i /><span><strong>{publicSiteCount}</strong><small>{text.statsSites}</small></span></div>
           </section>
         )}
+
+        <PosterCarousel language={language} />
 
         <section className={`content-toolbar ${!isAdmin ? "visitor-sticky-toolbar" : ""}`} id={!isAdmin ? "visitor-categories" : undefined}>
           {!isAdmin ? (

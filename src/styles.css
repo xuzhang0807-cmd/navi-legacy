@@ -827,3 +827,22 @@
   .admin-add-category-chip { min-height: 25px; padding: 0 8px; font-size: 8px; }
   .profile-preferences-grid { grid-template-columns: 1fr; }
 }
+
+/* Website icon editing and resilient image previews. */
+.site-icon-field { display: grid; gap: 8px; min-width: 0; margin-bottom: 15px; }
+.site-icon-field > .form-field { margin: 0; }
+.site-icon-input-row { display: flex; gap: 8px; min-width: 0; }
+.site-icon-input-row > input { flex: 1 1 auto; min-width: 0; width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: var(--surface-raised); font: inherit; font-size: 12px; }
+.site-icon-input-row > input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.site-icon-input-row > button { flex: none; }
+.site-icon-preview-row { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.site-icon-preview-row .site-avatar { width: 48px; height: 54px; }
+.site-icon-preview-row > div { min-width: 0; }
+.site-icon-preview-caption { color: var(--ink-soft); font-size: 11px; font-weight: 650; }
+.site-icon-help, .site-icon-notice { margin: 4px 0 0; color: var(--muted); font-size: 10px; line-height: 1.65; overflow-wrap: anywhere; }
+.site-icon-notice { margin: 0; }
+.site-icon-upload { position: relative; display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; color: var(--accent-dark); font-size: 10px; font-weight: 650; cursor: pointer; }
+.site-icon-upload svg { width: 13px; height: 13px; }
+.site-icon-upload input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.site-icon-upload:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 450px) { .site-icon-input-row { flex-wrap: wrap; } .site-icon-input-row > input { flex-basis: 100%; } .site-icon-input-row > button { min-height: 34px; } }

@@ -1,0 +1,12 @@
+.poster-carousel { position: relative; isolation: isolate; width: 100%; height: clamp(240px, 30vw, 420px); overflow: hidden; margin: 0 0 24px; border: 1px solid var(--line); border-radius: 20px; background: #35383f; }
+.poster-slides, .poster-slide, .poster-image, .poster-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; }
+.poster-slide { background: #35383f; animation: poster-reveal .65s ease both; }
+.poster-tone-1 { background: #a3a49a; }
+.poster-tone-2 { background: #353044; }
+.poster-backdrop { background-position: center; background-size: cover; filter: blur(24px) brightness(.8); transform: scale(1.08); }
+.poster-image { display: block; object-fit: contain; }
+@keyframes poster-reveal { from { opacity: .25; } to { opacity: 1; } }
+@media (max-width: 700px) {
+  .poster-carousel { height: auto; min-height: 210px; aspect-ratio: 16 / 9; margin-bottom: 17px; border-radius: 15px; }
+}
+@media (prefers-reduced-motion: reduce) { .poster-slide { animation: none; } }

@@ -4,7 +4,7 @@
 
 仓库结构：`src/` 放 React + TypeScript 页面，`worker/` 放 Cloudflare Worker API，`migrations/` 放 D1 schema，`tests/` 放自动化回归测试，`frontend/` 是 Wrangler `assets.directory` 指向的静态构建产物（随提交入库，因为仓库没有 CI 重建）。原 `decompiled/` 与 `legacy-build/` 是历史阅读副本与旧版备份，已移出 Git 跟踪，只在本地 `.local-archive/` 或 `faee7fc` 及更早的提交里查阅。
 
-本仓库的 `wrangler.jsonc` 仍保留既有 D1 绑定。开发预览必须使用 `pnpm dev:demo`（只读写浏览器本地演示数据），或使用 `pnpm dev:worker`（Wrangler 本地 Worker / 本地 D1）；不要加 `--remote`，不要运行任何部署命令。演示环境与旧站数据完全隔离。
+默认后端改为 `pnpm dev:server`（Node 24 + 项目内 SQLite），配合 `pnpm dev` 使用真实本地 API；`pnpm dev:demo` 仍只写浏览器演示数据。`wrangler.jsonc` 暂保留旧 D1 绑定，`pnpm dev:worker` 仅用于兼容检查；勿与 Node 服务占用相同 8787 端口。开发数据与线上完全隔离。只有 README 描述的 D1 完整 SQL 导出使用 `--remote`，该操作只读；不对生产执行数据库迁移或部署。
 
 ## 导航数据模型
 
@@ -26,12 +26,12 @@ pnpm install
 pnpm dev:demo       # 本地演示 UI，不调用 /api，也不读取线上数据
 pnpm test           # Worker 公开字段边界测试
 pnpm build          # TypeScript 检查 + 静态构建到 frontend/
-git checkout -- frontend/   # 构建后还原产物，避免无关 hash 变更混入提交
+
 ```
 
 依赖需 pnpm 10.x（`pnpm-lock.yaml` 为 `lockfileVersion: '9.0'`）。若系统 pnpm 版本不符，用 `corepack prepare pnpm@10.18.3 --activate` 固定版本，不要改动 lockfile。
 
-需要本地 Worker 时另开终端运行 `pnpm dev:worker`，再在另一个终端使用 `pnpm dev`。本地数据迁移命令必须显式加 `--local`。`pnpm` 脚本没有部署入口；上线需在用户检查截图并明确确认之后另行处理。
+本地默认使用 `pnpm dev:server` 与 `pnpm dev`；服务首次启动自动初始化 `.local-data/navi.sqlite`。旧 Worker 的本地迁移命令必须显式加 `--local`。服务器构建与部署步骤见 README；先检查本地与迁移快照，确认切换目标再变更线上反代。`frontend/` 随源码重新构建，避免版本滞后。
 
 ## 已知待审查项
 

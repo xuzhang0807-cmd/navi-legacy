@@ -1,0 +1,35 @@
+# /home/web/conf.d/dh.kazerush.xyz.conf
+# Keep the existing certificate paths used by your nginx installation.
+server {
+    listen 80;
+    server_name dh.kazerush.xyz;
+    location ^~ /.well-known/acme-challenge/ { root /var/www/letsencrypt; }
+    location / { return 301 https://$host$request_uri; }
+}
+server {
+    listen 443 ssl;
+    server_name dh.kazerush.xyz;
+    ssl_certificate /etc/nginx/certs/dh.kazerush.xyz_cert.pem;
+    ssl_certificate_key /etc/nginx/certs/dh.kazerush.xyz_key.pem;
+    client_max_body_size 1m;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    location / {
+        # Host nginx or a container using host networking can use this loopback endpoint.
+        # A bridge-network nginx container must join navi-blog-link and use
+        # proxy_pass http://navi:8787; instead. The host-gateway IP cannot reach
+        # a published port that binds only to 127.0.0.1.
+        proxy_pass http://127.0.0.1:8787;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header CF-Connecting-IP "";
+        proxy_read_timeout 30s;
+        proxy_connect_timeout 5s;
+        proxy_cache off;
+        proxy_no_cache 1;
+        proxy_cache_bypass 1;
+    }
+}

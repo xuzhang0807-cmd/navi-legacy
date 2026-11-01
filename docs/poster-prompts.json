@@ -1,0 +1,27 @@
+{
+  "generator": "muse-mcp",
+  "generated_on": "2026-11-01",
+  "source_size": [
+    2048,
+    1152
+  ],
+  "published_widths": [
+    800,
+    1600
+  ],
+  "format": "WebP",
+  "posters": [
+    {
+      "file": "editorial-evening.webp",
+      "prompt": "Use case: photorealistic-natural. Asset type: wide responsive website banner, high-end fashion editorial photography. Subject: a beautiful adult woman aged 28, confident, glamorous and sensually styled, natural realistic anatomy and skin texture. Composition: 16:9 wide cinematic fashion photograph, show face and upper body, keep the woman near the center with safe margins so both her face and body remain visible when cropped for a phone; subject eyes near the upper third. Constraints: clearly adult, fully opaque clothing, tasteful non-explicit fashion, no nudity, no sexual activity, no text, no logos, no watermark. Scene: elegant upscale interior at dusk with warm gold window light. Styling: fitted black satin evening dress with delicate shoulder straps and a tasteful neckline, bare shoulders, long dark hair, refined evening makeup, alluring direct gaze, relaxed upright pose with one hand resting on the railing. Lighting: polished warm editorial light and subtle shadow, rich charcoal and champagne palette."
+    },
+    {
+      "file": "coastal-muse.webp",
+      "prompt": "Use case: photorealistic-natural. Asset type: wide responsive website banner, high-end fashion editorial photography. Subject: a beautiful adult woman aged 28, confident, glamorous and sensually styled, natural realistic anatomy and skin texture. Composition: 16:9 wide cinematic fashion photograph, show face and upper body, keep the woman near the center with safe margins so both her face and body remain visible when cropped for a phone; subject eyes near the upper third. Constraints: clearly adult, fully opaque clothing, tasteful non-explicit fashion, no nudity, no sexual activity, no text, no logos, no watermark. Scene: Mediterranean terrace overlooking a blue coast at golden hour. Styling: chic fitted ivory halter mini dress with opaque fabric, sun-kissed bare shoulders and legs, flowing dark chestnut hair, subtle gold jewelry. Pose: confident relaxed seated fashion pose, direct friendly gaze, elegant and flirty mood. Lighting: soft sunset rim light, natural beach atmosphere, cream and turquoise palette."
+    },
+    {
+      "file": "city-lights.webp",
+      "prompt": "Use case: photorealistic-natural. Asset type: wide responsive website banner, high-end fashion editorial photography. Subject: a beautiful adult woman aged 28, confident, glamorous and sensually styled, natural realistic anatomy and skin texture. Composition: 16:9 wide cinematic fashion photograph, show face and upper body, keep the woman near the center with safe margins so both her face and body remain visible when cropped for a phone; subject eyes near the upper third. Constraints: clearly adult, fully opaque clothing, tasteful non-explicit fashion, no nudity, no sexual activity, no text, no logos, no watermark. Scene: stylish rooftop lounge with distant city lights and blue-hour sky. Styling: fitted deep burgundy off-shoulder cocktail dress, opaque satin fabric, beautiful long dark hair, refined makeup. Pose: standing confident with a slight natural turn toward camera, elegant alluring expression, natural hands, no extreme body proportions. Lighting: clean cinematic editorial light on face and soft bokeh behind, burgundy and midnight-blue palette."
+    }
+  ]
+}
