@@ -87,6 +87,8 @@ function SiteCard({
   onVisit: (siteId: number) => void;
   onEdit: (site: Site) => void;
 }) {
+  // Layout adapted from Framesbase React Bits Pro Card 2 (integration rows).
+  // https://framesbase.app/reactbits-pro/app-ui/card/card-2
   return (
     <article className="site-card">
       <a
@@ -98,34 +100,35 @@ function SiteCard({
         aria-label={`打开 ${site.name}`}
       >
         <SiteAvatar site={site} />
-        <span className="site-copy">
-          <h4><span>{site.name}</span></h4>
-          <span className="site-domain">{site.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
+        <div className="site-copy">
+          <h4><span>{site.name}</span><ExternalLink aria-hidden="true" /></h4>
           {site.description && <p>{site.description}</p>}
-        </span>
+          <span className="site-domain">{site.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
+        </div>
       </a>
-      <span className="site-card-tools">
-        {admin && (
-          <button type="button" aria-label={`编辑 ${site.name}`} title="编辑站点" onClick={() => onEdit(site)}>
-            <Pencil />
+      <div className="site-card-footer">
+        {admin && <span className="site-admin-visibility">{isPublic(site.is_public) ? <Globe /> : <LockKeyhole />}{isPublic(site.is_public) ? "公开" : "私密"}</span>}
+        <div className="site-card-tools">
+          {admin && (
+            <button type="button" aria-label={`编辑 ${site.name}`} title="编辑站点" onClick={() => onEdit(site)}>
+              <Pencil />
+            </button>
+          )}
+          <button
+            type="button"
+            className={favorite ? "favorited" : ""}
+            aria-label={favorite ? `取消收藏 ${site.name}` : `收藏 ${site.name}`}
+            aria-pressed={favorite}
+            title={favorite ? "取消收藏" : "收藏"}
+            onClick={() => onFavorite(site.id)}
+          >
+            <Star fill={favorite ? "currentColor" : "none"} />
           </button>
-        )}
-        <button
-          type="button"
-          className={favorite ? "favorited" : ""}
-          aria-label={favorite ? `取消收藏 ${site.name}` : `收藏 ${site.name}`}
-          title={favorite ? "取消收藏" : "收藏"}
-          onClick={() => onFavorite(site.id)}
-        >
-          <Star fill={favorite ? "currentColor" : "none"} />
-        </button>
-      </span>
-      {admin && <span className="site-admin-visibility">{isPublic(site.is_public) ? <Globe /> : <LockKeyhole />}{isPublic(site.is_public) ? "公开" : "私密"}</span>}
-      {admin && <span className="external-mark"><ExternalLink /></span>}
+        </div>
+      </div>
     </article>
   );
 }
-
 function VisibilityChoice({ value, onChange }: { value: PublicFlag; onChange: (value: PublicFlag) => void }) {
   return (
     <div className="visibility-choice" role="group" aria-label="可见范围">

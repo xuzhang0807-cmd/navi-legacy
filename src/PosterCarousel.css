@@ -1,12 +1,19 @@
 .poster-carousel { position: relative; isolation: isolate; width: 100%; height: clamp(240px, 30vw, 420px); overflow: hidden; margin: 0 0 24px; border: 1px solid var(--line); border-radius: 20px; background: #35383f; }
-.poster-slides, .poster-slide, .poster-image, .poster-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; }
-.poster-slide { background: #35383f; animation: poster-reveal .65s ease both; }
+.poster-slides, .poster-slide, .poster-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; }
+.poster-slide { display: flex; align-items: center; justify-content: center; background: #35383f; opacity: 0; pointer-events: none; transition: opacity .4s ease; }
+.poster-slide.is-active { z-index: 1; opacity: 1; }
 .poster-tone-1 { background: #a3a49a; }
 .poster-tone-2 { background: #353044; }
 .poster-backdrop { background-position: center; background-size: cover; filter: blur(24px) brightness(.8); transform: scale(1.08); }
-.poster-image { display: block; object-fit: contain; }
-@keyframes poster-reveal { from { opacity: .25; } to { opacity: 1; } }
+.poster-image { position: relative; display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgb(0 0 0 / .2) 3%, rgb(0 0 0 / .65) 8%, #000 15%, #000 85%, rgb(0 0 0 / .65) 92%, rgb(0 0 0 / .2) 97%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0%, rgb(0 0 0 / .2) 3%, rgb(0 0 0 / .65) 8%, #000 15%, #000 85%, rgb(0 0 0 / .65) 92%, rgb(0 0 0 / .2) 97%, transparent 100%); }
+.poster-pagination { position: absolute; z-index: 2; bottom: 9px; left: 50%; display: flex; gap: 2px; transform: translateX(-50%); }
+.poster-dot { display: grid; width: 30px; height: 30px; padding: 0; place-items: center; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
+.poster-dot::before { width: 7px; height: 7px; border: 1px solid rgb(255 255 255 / .8); border-radius: 50%; background: rgb(255 255 255 / .35); box-shadow: 0 1px 5px rgb(0 0 0 / .5); content: ""; transition: background .2s ease, transform .2s ease; }
+.poster-dot.is-active::before { background: #fff; transform: scale(1.25); }
+.poster-dot:hover::before { background: rgb(255 255 255 / .85); }
+.poster-dot:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 @media (max-width: 700px) {
-  .poster-carousel { height: auto; min-height: 210px; aspect-ratio: 16 / 9; margin-bottom: 17px; border-radius: 15px; }
+  .poster-carousel { height: auto; min-height: 0; aspect-ratio: 16 / 9; margin-bottom: 17px; border-radius: 15px; }
+  .poster-pagination { bottom: 4px; }
 }
-@media (prefers-reduced-motion: reduce) { .poster-slide { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .poster-slide { transition: none; } .poster-dot::before { transition: none; } }

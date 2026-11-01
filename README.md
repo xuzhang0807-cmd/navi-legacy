@@ -19,9 +19,11 @@ pnpm build
 
 `pnpm start` 用于已经构建的服务器运行环境，读取 `.env`；`pnpm dev:server` 读取 `.dev.vars` 和 `.env.local`，使用 Node watch。只有生产反代才设置公开 HTTPS `PUBLIC_ORIGIN`。`pnpm dev:demo` 可独立预览浏览器演示数据；真实登录请使用 `pnpm dev`。本地 SQLite 独立于线上 D1。
 
-网站编辑支持按网址“一键获取” faviconextractor 图标，也可以输入图片 URL、短文字或上传图片；图片加载失败时显示名称缩写。网站网址可省略 `https://`。三张横幅海报可在桌面与手机自适应裁剪，每 6.5 秒自动轮转且不显示切换按钮；页面切到后台或系统要求减少动画时暂停。
+网站编辑支持按网址“一键获取” faviconextractor 图标，也可以输入图片 URL、短文字或上传图片；图片加载失败时显示名称缩写。网站网址可省略 `https://`。三张横幅海报可在桌面与手机自适应裁剪，每 2 秒自动轮转，底部三个圆点可直接选择海报；页面切到后台或系统要求减少动画时暂停。
 
-海报通过用户指定的 `muse-mcp` 生成，包含晚装、海岸和城市夜色三张成年女性时尚海报；提示词保存于 [`docs/poster-prompts.json`](docs/poster-prompts.json)。页面按屏幕选择 800 / 1600 像素 WebP，等比完整展示人物，并以柔焦背景填充宽屏空白，资产随项目部署。
+海报通过用户指定的 `muse-mcp` 生成，包含晚装、海岸和城市夜色三张成年女性时尚海报；提示词保存于 [`docs/poster-prompts.json`](docs/poster-prompts.json)。页面按屏幕选择 800 / 1600 像素 WebP，等比完整展示人物，并以两侧向中央渐变的柔焦背景填充宽屏空白，资产随项目部署。
+
+导航卡片参考 Framesbase 的 [Card 2 — Integration rows](https://framesbase.app/reactbits-pro/app-ui/card/card-2)，保留原始图标及透明背景，不加有色图标套壳。标题、介绍和工具栏使用更易读的字号。
 
 ## Blog 首页导航与登录
 
@@ -81,6 +83,24 @@ docker compose up -d --build --wait
 
 复制后对比分组、网站、收藏等计数，以及匿名接口中不存在私密分类、站点和备注。D1 SQL / SQLite 含私密内容，只保存在忽略目录或受保护备份，不提交 GitHub。本地 Wrangler 演示库可用 `node:sqlite` 的 `backup()` 生成一致快照，避免漏掉未刷入主文件的 WAL。
 
+## 打包代码与本地站点数据
+
+在 WSL 安装 Node.js 24、Git 和 tar，先验证并提交源码，再运行：
+
+```bash
+pnpm check
+# 提交审核过的源码与 frontend/ 构建产物后：
+pnpm package:server
+# 可选：指定另一个数据库文件
+# pnpm package:server /absolute/path/to/navi.sqlite
+```
+
+命令要求所有已跟踪源码没有未提交改动，使用 `git archive HEAD` 收集对应提交的文件，再通过 `node:sqlite` 的 `backup()` 读取本地数据库的一致快照，无需停止服务。输出为 `.local-data/releases/navi-server-<时间戳>-<编号>.tar.gz`；不会覆盖已有包。源码归档拒绝运行时数据、凭据和依赖目录，真实 `.env`、`.dev.vars` 不会进入包；服务器需按 `.env.example` 单独配置凭据。
+
+包中包含 `navi-server/` 源码、`.local-data/imported.sqlite` 和 `release-manifest.json`。清单仅记录提交、表计数和快照 SHA-256；快照及归档权限为 `600`。包可能包含私密分类、站点和备注，只作为受保护的服务器迁移文件，不提交 GitHub 或公开下载。
+
+将包传到 bero 后，解压进入 `navi-server/`，按上方「bero 部署」设置环境变量和共享网络，再使用「从 Cloudflare D1 迁移数据」中的一次性容器复制命令，把包内 `.local-data/imported.sqlite` 导入全新数据卷。核对清单计数、公开/私密接口后启动；已有卷先备份，不覆盖正在运行的数据库。重复打包会从当前本地数据库生成新快照，包含之后在本地保存的站点改动。
+
 ## 结构与验证
 
 ```text
@@ -90,6 +110,7 @@ server/               Node HTTP 服务与 D1/SQLite 兼容层
 worker/index.js       共享 API 实现及原 Worker 入口
 migrations/           SQLite / D1 本地建表基线
 scripts/import-d1.mjs 完整 SQL 快照导入（拒绝覆盖）
+scripts/package-server.mjs 提交源码与一致数据库快照打包
 tests/                API、隐私、图标、迁移回归
 frontend/             Vite 构建产物
 compose.yaml          bero/本地服务器容器配置

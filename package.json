@@ -14,7 +14,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.js",
-    "check": "pnpm test && pnpm build"
+    "check": "pnpm test && pnpm build",
+    "package:server": "node scripts/package-server.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
