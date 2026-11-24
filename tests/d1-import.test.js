@@ -7,8 +7,8 @@ import { importD1Sql } from '../scripts/import-d1.mjs';
 
 const baseline = await readFile(new URL('../migrations/0001_local_schema.sql', import.meta.url), 'utf8');
 async function fixture(t, sql) {
-  await mkdir(new URL('../.local-data/', import.meta.url), {recursive:true});
-  const directory = await mkdtemp(new URL('../.local-data/import-test-', import.meta.url).pathname);
+  await mkdir(new URL('../.tmp/', import.meta.url), {recursive:true});
+  const directory = await mkdtemp(new URL('../.tmp/import-test-', import.meta.url).pathname);
   t.after(() => rm(directory, {recursive:true,force:true}));
   const input=join(directory,'export.sql');
   await writeFile(input,sql);

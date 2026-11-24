@@ -1,0 +1,3 @@
+.login-blog { display: grid; gap: 8px; }
+.login-or { display: flex; align-items: center; gap: 10px; color: var(--faint); font-size: 12px; }
+.login-or::before, .login-or::after { content: ""; flex: 1; height: 1px; background: var(--border); }

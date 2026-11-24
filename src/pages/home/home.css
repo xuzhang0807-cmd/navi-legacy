@@ -1,0 +1,49 @@
+.home { padding-bottom: 56px; }
+
+.home-intro { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 20px 32px; padding-block: 40px 30px; }
+.home-intro-copy { min-width: 0; }
+.home-eyebrow { margin-bottom: 8px; color: var(--muted); font: 12px/1 var(--font-mono); }
+.home-intro h1 { font: 700 40px/1.1 var(--font-serif); }
+.home-lede { max-width: 44ch; margin-top: 10px; color: var(--muted); font-size: 15px; }
+.home-stats { display: flex; gap: 28px; margin: 0; }
+.home-stats div { display: grid; gap: 4px; }
+.home-stats dt { color: var(--faint); font: 11px/1 var(--font-mono); letter-spacing: .06em; }
+.home-stats dd { margin: 0; font: 600 24px/1 var(--font-serif); font-variant-numeric: tabular-nums; }
+
+.home-edit-hint { margin-bottom: 20px; color: var(--accent-strong); font-size: 13px; }
+.home-edit-hint::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 8px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
+
+.home-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 40px; align-items: start; }
+.home-index { position: sticky; top: 24px; min-width: 0; }
+.home-sections { display: grid; gap: 40px; min-width: 0; }
+.home-result { color: var(--muted); font-size: 13px; margin-bottom: -24px; }
+
+.home-add-group {
+  display: flex; align-items: center; justify-content: center; gap: 6px; height: 56px;
+  border: 1px dashed var(--border); border-radius: var(--radius-card); background: transparent; color: var(--muted); font-size: 13px;
+}
+.home-add-group svg { width: 16px; height: 16px; }
+.home-add-group:hover { border-color: var(--accent); color: var(--accent); }
+
+.home-empty { display: grid; justify-items: center; gap: 8px; padding: 64px 16px; color: var(--muted); text-align: center; }
+.home-empty > svg { width: 28px; height: 28px; color: var(--faint); }
+.home-empty strong { color: var(--fg); font-size: 16px; }
+.home-empty p { max-width: 40ch; font-size: 13px; }
+.home-empty .btn, .home-empty .btn-primary { margin-top: 6px; }
+
+.home-skeleton { display: grid; gap: 14px; }
+.home-skeleton-title { width: 120px; height: 24px; border-radius: 6px; background: var(--panel); }
+.home-skeleton-card { height: 92px; border-radius: var(--radius-card); background: var(--panel); animation: skeleton-pulse 1.4s ease-in-out infinite; }
+@keyframes skeleton-pulse { 50% { opacity: .55; } }
+
+@media (max-width: 860px) {
+  .home-intro { padding-block: 24px 18px; }
+  .home-intro h1 { font-size: 30px; }
+  .home-stats { gap: 20px; }
+  .home-stats dd { font-size: 20px; }
+  .home-layout { grid-template-columns: 1fr; gap: 20px; }
+  .home-index { position: static; }
+  .home-sections { gap: 28px; }
+  .home-sections .nav-section-head h2 { font-size: 19px; }
+  .home-result { margin-bottom: -12px; }
+}

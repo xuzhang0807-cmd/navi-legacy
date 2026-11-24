@@ -12,7 +12,7 @@ ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 DATABASE_PATH=/app/data/navi.sqli
 WORKDIR /app
 COPY --from=build --chown=node:node /app/frontend ./frontend
 COPY --chown=node:node server ./server
-COPY --chown=node:node worker ./worker
+COPY --chown=node:node src/shared/lib/site-icons.ts ./src/shared/lib/site-icons.ts
 COPY --chown=node:node migrations ./migrations
 COPY --chown=node:node package.json ./package.json
 RUN mkdir /app/data && chown node:node /app/data

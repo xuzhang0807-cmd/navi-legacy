@@ -7,6 +7,9 @@ const projectRoot = fileURLToPath(new URL("./src", import.meta.url));
 export default defineConfig({
   root: projectRoot,
   plugins: [react()],
+  resolve: {
+    alias: { "@": projectRoot },
+  },
   server: {
     host: "0.0.0.0",
     proxy: {

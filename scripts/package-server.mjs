@@ -24,7 +24,7 @@ function rejectSensitiveArchive(paths) {
 export async function packageServer(databaseFile = join(root, '.local-data/navi.sqlite')) {
   const git = async (...args) => (await execFile('git', args, { cwd: root, maxBuffer: 8 * 1024 * 1024 })).stdout.trim();
   if (await git('status', '--porcelain', '--untracked-files=no')) {
-    throw new Error('Tracked source changes are not committed. Run pnpm check and commit them before packaging.');
+    throw new Error('Tracked source changes are not committed. Commit the verified source before packaging.');
   }
   const commit = await git('rev-parse', 'HEAD');
   const paths = (await git('ls-tree', '-r', '--name-only', '-z', commit)).split('\0').filter(Boolean);
@@ -56,13 +56,19 @@ export async function packageServer(databaseFile = join(root, '.local-data/navi.
     let counts;
     try {
       snapshot.exec('PRAGMA journal_mode = DELETE;');
+      const exists = snapshot.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?");
+      if (exists.get('sessions')) {
+        // Runtime sessions must never carry over to another deployment.
+        snapshot.exec('PRAGMA secure_delete = ON; DELETE FROM sessions; VACUUM;');
+      }
       if (snapshot.prepare('PRAGMA integrity_check').all().some(row => row.integrity_check !== 'ok')) throw new Error('Snapshot integrity check failed.');
       if (snapshot.prepare('PRAGMA foreign_key_check').all().length) throw new Error('Snapshot foreign key check failed.');
       for (const table of ['groups', 'sites']) {
         const invalid = snapshot.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE is_public IS NULL OR is_public NOT IN (0, 1)`).get().n;
         if (invalid) throw new Error(`Snapshot has invalid ${table} visibility values.`);
       }
-      counts = Object.fromEntries(tables.map(table => [table, Number(snapshot.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n)]));
+      const dataTables = exists.get('owner_favorites') ? [...tables, 'owner_favorites'] : tables;
+      counts = Object.fromEntries(dataTables.map(table => [table, Number(snapshot.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n)]));
     } finally { snapshot.close(); }
     const databaseSha256 = createHash('sha256').update(await readFile(snapshotFile)).digest('hex');
     const manifest = { format: 1, createdAt, commit, database: '.local-data/imported.sqlite', counts, databaseSha256 };

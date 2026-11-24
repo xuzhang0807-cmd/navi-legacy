@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { faviconUrl, isImageIcon, normalizeIconInput, normalizeWebsiteUrl } from "../src/site-icons.ts";
+import { faviconUrl, isImageIcon, normalizeIconInput, normalizeWebsiteUrl } from "../src/shared/lib/site-icons.ts";
 
 test("favicon extraction uses the hostname without leaking paths, queries or credentials", () => {
   assert.equal(faviconUrl("komari.xublog.de/dashboard?private=value"), "https://www.faviconextractor.com/favicon/komari.xublog.de?larger=true");

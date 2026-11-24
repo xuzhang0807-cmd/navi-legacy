@@ -14,22 +14,39 @@ server {
     client_max_body_size 1m;
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header CF-Connecting-IP "";
+    proxy_read_timeout 30s;
+    proxy_connect_timeout 5s;
+    proxy_cache off;
+    proxy_no_cache 1;
+    proxy_cache_bypass 1;
+    error_page 413 = @navi_body_too_large;
+
     location / {
         # Host nginx or a container using host networking can use this loopback endpoint.
         # A bridge-network nginx container must join navi-blog-link and use
-        # proxy_pass http://navi:8787; instead. The host-gateway IP cannot reach
+        # proxy_pass http://navi:8787; in both locations. The host-gateway IP cannot reach
         # a published port that binds only to 127.0.0.1.
         proxy_pass http://127.0.0.1:8787;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header CF-Connecting-IP "";
-        proxy_read_timeout 30s;
-        proxy_connect_timeout 5s;
-        proxy_cache off;
-        proxy_no_cache 1;
-        proxy_cache_bypass 1;
+    }
+    location = /api/v1/auth/blog/callback {
+        # OAuth query parameters contain a one-time code and state.
+        access_log off;
+        proxy_hide_header Referrer-Policy;
+        add_header Referrer-Policy no-referrer always;
+        add_header X-Content-Type-Options nosniff always;
+        proxy_pass http://127.0.0.1:8787;
+    }
+    location @navi_body_too_large {
+        default_type application/json;
+        add_header Cache-Control "private, no-store" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        return 413 '{"error":{"code":"BODY_TOO_LARGE","message":"请求体过大，最大允许 1 MiB"}}';
     }
 }

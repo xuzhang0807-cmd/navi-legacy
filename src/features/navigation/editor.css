@@ -1,0 +1,26 @@
+.editor-icon-row { display: flex; gap: 6px; }
+.editor-icon-row .input { flex: 1; }
+.editor-upload { position: relative; overflow: hidden; cursor: pointer; }
+.editor-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.editor-upload:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.editor-visibility { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.editor-visibility button {
+  display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 8px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); color: var(--fg); text-align: left;
+}
+.editor-visibility svg { width: 16px; height: 16px; color: var(--muted); }
+.editor-visibility strong { font-size: 14px; font-weight: 600; }
+.editor-visibility small { grid-column: 2; color: var(--muted); font-size: 12px; }
+.editor-visibility button[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.editor-visibility button[aria-checked="true"] svg { color: var(--accent-strong); }
+.editor-warn { color: var(--private); font-size: 12px; }
+
+.editor-preview { display: grid; grid-template-columns: minmax(0, 220px); }
+
+@media (max-width: 420px) {
+  .editor-icon-row { flex-wrap: wrap; }
+  .editor-icon-row .input { flex-basis: 100%; }
+  .editor-visibility { grid-template-columns: 1fr; }
+}

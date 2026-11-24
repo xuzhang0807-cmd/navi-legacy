@@ -1,31 +1,39 @@
 # Navi
 
-个人导航站，React + TypeScript 前端，Node.js 24 + SQLite 后端。可和 blog 在 bero 同机托管；Cloudflare Worker 入口暂保留，用于兼容检查与数据迁移，不再是服务器版的运行依赖。
+个人导航站，React + TypeScript 前端，Node.js 24 + SQLite 后端。可和博客在 bero 同机托管。Wrangler 用于从历史 D1 库导出数据。
 
 ## 本地开发
 
-需要 Node.js 24、pnpm 10。数据、凭据和生成图片的临时文件放在被忽略的 `.local-data/`。
+需要 Node.js 24、pnpm 10。开发数据库存放在 `.local-data/`，临时验证文件存放在 `.tmp/`。两处均被 Git 忽略。
 
 ```bash
 pnpm install --frozen-lockfile
 cp .env.example .dev.vars
 # 编辑 .dev.vars，填写 AUTH_USERNAME、AUTH_PASSWORD、随机 AUTH_SECRET。
-# 本地请删除 PUBLIC_ORIGIN，使用 NODE_ENV=development。
+# 本地使用 PUBLIC_ORIGIN=http://localhost:5173 和 NODE_ENV=development。
 pnpm dev:server  # http://localhost:8787，自动初始化 .local-data/navi.sqlite
 pnpm dev         # http://localhost:5173，/api 代理到 8787
 pnpm test
-pnpm build
 ```
 
-`pnpm start` 用于已经构建的服务器运行环境，读取 `.env`；`pnpm dev:server` 读取 `.dev.vars` 和 `.env.local`，使用 Node watch。只有生产反代才设置公开 HTTPS `PUBLIC_ORIGIN`。`pnpm dev:demo` 可独立预览浏览器演示数据；真实登录请使用 `pnpm dev`。本地 SQLite 独立于线上 D1。
+`pnpm start` 用于已构建的服务器运行环境，读取 `.env`。`pnpm dev:server` 读取 `.dev.vars` 和 `.env.local`，使用 Node watch。现有具有站长用户名和密码的 `.dev.vars` 可直接启用密码登录，开发来源默认是 `http://localhost:5173`。验证本地登录时从 `pnpm dev` 打开的地址访问。本地 SQLite 独立于历史 D1。
 
-网站编辑支持按网址“一键获取” faviconextractor 图标，也可以输入图片 URL、短文字或上传图片；图片加载失败时显示名称缩写。网站网址可省略 `https://`。三张横幅海报可在桌面与手机自适应裁剪，每 2 秒自动轮转，底部三个圆点可直接选择海报；页面切到后台或系统要求减少动画时暂停。
+`pnpm dev:demo` 只启动前端，用 `src/demo/` 里的浏览器内假后端和示例数据，不调用 `/api`。点「登录 → 用博客账号登录」即可切到站长视图，适合单独改页面。
 
-海报通过用户指定的 `muse-mcp` 生成，包含晚装、海岸和城市夜色三张成年女性时尚海报；提示词保存于 [`docs/poster-prompts.json`](docs/poster-prompts.json)。页面按屏幕选择 800 / 1600 像素 WebP，等比完整展示人物，并以两侧向中央渐变的柔焦背景填充宽屏空白，资产随项目部署。
+### 页面
 
-导航卡片参考 Framesbase 的 [Card 2 — Integration rows](https://framesbase.app/reactbits-pro/app-ui/card/card-2)，保留原始图标及透明背景，不加有色图标套壳。标题、介绍和工具栏使用更易读的字号。
+首页是刊物式布局：页头（博客外链、导航、规划中的资讯），简介和统计，左侧目录与搜索（按 `/` 聚焦，匹配分类名、站点名、介绍、网址，站长视图还匹配备注），右侧按分类展示卡片。卡片规格与博客首页导航卡片一致（见 [架构约定第 6 节](docs/architecture.md)）。
 
-## Blog 首页导航与登录
+- 访客：只看到公开分类里的公开站点，由服务端过滤。
+- 站长：私密内容带虚线框和锁标记；页头「编辑」进入编辑模式，可点卡片在右侧抽屉里修改、拖动或用方向键排序、收藏、增删分类。头像菜单可切到「以访客身份预览」。
+- 站点图标可以按网址自动获取、填图片地址或短文字、上传图片（≤256 KB），加载失败时显示名称首字。网址可省略 `https://`。
+- 亮色和暗色跟随系统，也可在页头切换。
+
+新增页面（例如搜索、资讯）按 [架构约定第 2、3 节](docs/architecture.md) 在路由表加一项并新建 `src/pages/<名称>/`。
+
+## 后端与博客首页导航
+
+`GET /api/v1/session` 返回可用登录方式和当前身份。`GET /api/v1/navigation` 按身份过滤分类、站点和备注。登录、管理、排序、收藏及备份接口见 [架构与接口约定](docs/architecture.md)。生产写请求的 `Origin` 必须等于 `PUBLIC_ORIGIN`，`ALLOWED_ORIGINS` 可指定额外的跨域读取来源。
 
 Navi 是导航内容的唯一来源。blog 的 `/api/navigation` 验证 blog 自有会话后调用服务端接口：
 
@@ -38,28 +46,57 @@ GET /api/integrations/blog/navigation
 - 错误凭据返回 401；这个凭据没有 Navi 管理或写入权限。
 - 响应不含管理员 `notes`，并禁止缓存。
 
-blog 设置 `NAVI_INTERNAL_URL=http://navi:8787`、`NAVI_INTEGRATION_TOKEN`；Navi 设置同一个值到 `BLOG_NAVIGATION_TOKEN`。令牌只存在服务端，不得写入 `VITE_*` / `NEXT_PUBLIC_*` 变量。blog 有效登录会话可看到全部私密导航；此版本是单站共享目录，不是每个账号独立的数据空间。Navi 管理员登录和 blog 登录分别管理，blog 登录只解锁阅读，不赋予 Navi 编辑权限。
+博客设置 `NAVI_INTERNAL_URL=http://navi:8787` 和 `NAVI_INTEGRATION_TOKEN`，Navi 的 `BLOG_NAVIGATION_TOKEN` 使用同一个值。令牌只写入服务端环境。博客首页的可见范围由博客会话决定。Navi 编辑权限通过站长密码或博客 OAuth 的 `navi:manage` 能力授予。
 
-本地对接时，blog 的开发进程设置 `NAVI_INTERNAL_URL=http://127.0.0.1:8787`。生产两个 Compose 通过 `navi-blog-link` 外部网络互通；可用双方一致的 `NAVI_NETWORK` 覆盖名称。相对图标路径通过 blog 的 `NAVI_PUBLIC_ORIGIN` 指定公开 Navi 域名，避免把内部容器地址暴露给浏览器。
+本地对接时，博客开发进程设置 `NAVI_INTERNAL_URL=http://127.0.0.1:8787`。生产两个 Compose 通过 `navi-blog-link` 外部网络互通，可用双方一致的 `NAVI_NETWORK` 覆盖名称。博客用 `NAVI_PUBLIC_ORIGIN=https://dh.kazerush.xyz` 解析站内图标路径。
+
+## 配置博客 OAuth 登录
+
+在博客启用 `navi:manage` 和 `/api/identity/me` 后，向现有 `POST /oauth/register` 注册一次客户端。以下命令将注册响应写入受限文件。
+
+```bash
+umask 077
+mkdir -p .tmp
+curl --fail --silent --show-error \
+  --output .tmp/blog-oauth-registration.json \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "client_name": "Navi",
+    "token_endpoint_auth_method": "client_secret_post",
+    "grant_types": ["authorization_code", "refresh_token"],
+    "response_types": ["code"],
+    "redirect_uris": [
+      "https://dh.kazerush.xyz/api/v1/auth/blog/callback",
+      "http://localhost:5173/api/v1/auth/blog/callback"
+    ]
+  }' https://zxublog.com/oauth/register
+```
+
+把注册响应中的 `client_id` 和 `client_secret` 写入 Navi 服务器的 `.env` 中的 `BLOG_OAUTH_CLIENT_ID` 与 `BLOG_OAUTH_CLIENT_SECRET`。设置 `BLOG_OAUTH_ISSUER=https://zxublog.com`、`BLOG_OAUTH_INTERNAL_URL=http://xublog:3100`，以及 `PUBLIC_ORIGIN=https://dh.kazerush.xyz`。浏览器访问公开授权页，Navi 容器通过共享网络向 `xublog` 换令牌、复核身份和撤销授权。妥善保存客户端密钥与随机 `AUTH_SECRET`，清理临时注册响应。
+
+本地对接开发博客时，在 `.dev.vars` 或 `.env.local` 填写该环境的 OAuth 配置，从登记过的 `http://localhost:5173` 发起登录。若省略 `BLOG_OAUTH_INTERNAL_URL`，后端调用配置的公开发行方。
+
+本地博客要用生产构建运行（`npm run build` 后 `node --env-file=.env.local dist/standalone/server.js`，并设 `XUBLOG_SESSION_COOKIE_SECURE=true`）。`vinext dev` 在 workerd 里写不了审计日志，客户端注册和授权会返回 500。浏览器把 `http://localhost` 视为安全上下文，Secure Cookie 在本地可用。
+
+`AUTH_PASSWORD_LOGIN=false` 可切换到仅博客登录。保留密码登录时，填写 `AUTH_USERNAME` 和 `AUTH_PASSWORD`。旧 Worker 的 bcrypt 配置需更新为站长密码，或采用仅博客登录。升级旧数据库时，即使关闭密码登录，首次启动也要用 `AUTH_USERNAME` 指定原站长用户名以迁移收藏。
 
 ## bero 部署
 
 以下为切换步骤，执行前先检查本地页面与迁移快照。代码在 GitHub 的 `navi-legacy` 仓库维护，不直接在服务器修改源码。
 
-1. 在 bero 检出审核后的提交到 `/home/docker/navi`，保留现有 Worker 以便切换失败时回退。
-2. 创建共享网络：`docker network create navi-blog-link`（已存在无需重复）；blog 的 `make net` 也会创建该网络。
-3. 复制 `.env.example` 到 `.env`。设置 `PUBLIC_ORIGIN=https://dh.kazerush.xyz`、管理员账号密码、至少 32 字符的随机 `AUTH_SECRET`，以及独立的 `BLOG_NAVIGATION_TOKEN`。blog `.env` 的 `NAVI_INTEGRATION_TOKEN` 与之相同；Compose 自动设置生产运行环境。
-4. 按下方流程将 D1 快照迁入 SQLite；空站可跳过。数据库卷永久保存于 `/app/data`。
-5. `docker compose up -d --build --wait`。检查 `http://127.0.0.1:8787/healthz`、管理登录和可见范围，再将 Nginx 从 Worker 改向本机端口。示例见 `deploy/nginx-navi.conf.example`，证书路径沿用实际环境。
-6. blog 的 Compose 加入共享网络后，使用其既有 `make deploy` 流程重新构建。确认匿名与已登录两种首页视图，再切换域名解析。
+1. 在 bero 的 `/home/docker/navi` 检出审核后的提交，保留上一版运行环境与数据库备份用于回滚。
+2. 使用 `docker network create navi-blog-link` 创建共享网络。已有网络可复用。让 Navi 和博客容器 `xublog` 加入该网络。
+3. 复制 `.env.example` 到 `.env`。设置生产来源和至少一种登录方式。独立生成至少 32 字符的 `AUTH_SECRET` 和 `BLOG_NAVIGATION_TOKEN`，博客的 `NAVI_INTEGRATION_TOKEN` 与后者相同。按上一节填入 OAuth 凭据。
+4. 已有 SQLite 卷先做一致备份，启动时自动按编号迁移。首次从 D1 切换时，按下节将 D1 快照导入新卷。空站可直接初始化。数据库卷挂载到 `/app/data`。
+5. 使用 `docker compose up -d --build --wait` 启动。检查 `http://127.0.0.1:8787/healthz`、访客导航及博客集成的可见范围。将 Nginx 指向 Navi 后，用登记的公开域名验证站长登录、私密数据及退出。反代示例见 `deploy/nginx-navi.conf.example`。
 
-容器只在 `127.0.0.1:8787` 发布 HTTP，TLS 由现有 Nginx 终止；准确设置 `PUBLIC_ORIGIN`，生产 Cookie 自动使用 Secure。保留卷和迁移 SQL 备份。不要 `docker compose down -v`。回滚使用上一个镜像和同批数据库备份，不直接复制正在写入的 SQLite 主文件。
+容器在 `127.0.0.1:8787` 发布 HTTP，TLS 由 Nginx 终止。生产 Cookie 使用 Secure。常驻容器使用只读根文件系统并移除所有 Linux capabilities。保留卷与迁移 SQL 备份，回滚时使用上一版镜像与对应的数据库快照。
 
 默认后端不信任客户端转发头。部署时确认容器看到的反代地址（例如 `docker network inspect navi-blog-link` 的网关），设置 `TRUST_PROXY=true`、`TRUSTED_PROXY_CIDRS=<反代精确地址>/32`，由 Nginx 覆盖 `X-Real-IP`，确保登录限流按真实 IP 区分。不要填写整个不受控网段，也不要让公众绕过 Nginx 直连后端。
 
 ## 从 Cloudflare D1 迁移数据
 
-旧线上 `/api/export` 没有完整导出 `is_public`，不能将旧 JSON 直接作为安全迁移来源。使用 D1 完整 SQL 只读导出，保留可见范围、收藏、最近访问和偏好全部表：
+从 D1 切换时，使用完整 SQL 的只读导出保留两级可见范围、备注和全部旧表。旧 JSON 的可见范围可能缺失。
 
 ```bash
 mkdir -p .local-data
@@ -67,7 +104,7 @@ pnpm exec wrangler d1 export navigation-db --remote --output .local-data/d1-expo
 node scripts/import-d1.mjs .local-data/d1-export.sql .local-data/imported.sqlite
 ```
 
-`--remote` 仅用于上面的只读导出；不要对线上运行 migrations apply、execute 或 deploy。脚本只创建新 SQLite 文件，目标已存在时拒绝覆盖；检查两级 `is_public`、数据库完整性和外键。缺少可见范围时中止，避免私密数据变公开。
+`--remote` 用于上述只读导出。导入脚本检查两级 `is_public`、数据库完整性和外键，目标已存在时拒绝覆盖。缺少可见范围时中止，避免私密数据变公开。
 
 首次启动前，创建未运行容器和数据卷，再复制确认过的 `imported.sqlite`。容器用户为 `node`（UID 1000）。已有数据卷应先备份，并使用全新卷切换；不要覆盖使用中的数据库。
 
@@ -81,14 +118,16 @@ docker compose up -d --build --wait
 
 上面的能力仅授予首次复制数据库的一次性容器，用于写入数据卷和设置所有者；常驻服务仍移除全部 Linux capabilities。
 
-复制后对比分组、网站、收藏等计数，以及匿名接口中不存在私密分类、站点和备注。D1 SQL / SQLite 含私密内容，只保存在忽略目录或受保护备份，不提交 GitHub。本地 Wrangler 演示库可用 `node:sqlite` 的 `backup()` 生成一致快照，避免漏掉未刷入主文件的 WAL。
+迁移按编号记录在 `schema_migrations`。首次升级按 `AUTH_USERNAME` 将旧站长收藏复制到 `owner_favorites`。旧偏好、设备收藏及访问记录保留在 SQLite 中。用升级前后的副本对比分组、站点和收藏计数，并验证匿名接口的可见范围。D1 SQL 与 SQLite 快照含私密内容，保存在忽略目录或受保护备份。本地 SQLite 可通过 `node:sqlite` 的 `backup()` 生成包含 WAL 数据的一致快照。
+
+API v1 导出的 JSON 包含 `version`、`exportDate`、`groups`、`sites` 和 `favorites`。导入在事务内替换导航和收藏，旧 JSON 缺少可见标记的条目按私密处理。API 导入受 1 MiB 限制。数据较大或旧字段超出当前校验范围时，用 SQLite 快照迁移。
 
 ## 打包代码与本地站点数据
 
 在 WSL 安装 Node.js 24、Git 和 tar，先验证并提交源码，再运行：
 
 ```bash
-pnpm check
+pnpm test
 # 提交审核过的源码与 frontend/ 构建产物后：
 pnpm package:server
 # 可选：指定另一个数据库文件
@@ -97,18 +136,20 @@ pnpm package:server
 
 命令要求所有已跟踪源码没有未提交改动，使用 `git archive HEAD` 收集对应提交的文件，再通过 `node:sqlite` 的 `backup()` 读取本地数据库的一致快照，无需停止服务。输出为 `.local-data/releases/navi-server-<时间戳>-<编号>.tar.gz`；不会覆盖已有包。源码归档拒绝运行时数据、凭据和依赖目录，真实 `.env`、`.dev.vars` 不会进入包；服务器需按 `.env.example` 单独配置凭据。
 
-包中包含 `navi-server/` 源码、`.local-data/imported.sqlite` 和 `release-manifest.json`。清单仅记录提交、表计数和快照 SHA-256；快照及归档权限为 `600`。包可能包含私密分类、站点和备注，只作为受保护的服务器迁移文件，不提交 GitHub 或公开下载。
+包中包含 `navi-server/` 源码、`.local-data/imported.sqlite` 和 `release-manifest.json`，SQLite 副本会清理运行时会话。清单记录提交、表计数和快照 SHA-256。快照及归档权限为 `600`。包可能包含私密分类、站点和备注，应作为受保护的服务器迁移文件保存。
 
 将包传到 bero 后，解压进入 `navi-server/`，按上方「bero 部署」设置环境变量和共享网络，再使用「从 Cloudflare D1 迁移数据」中的一次性容器复制命令，把包内 `.local-data/imported.sqlite` 导入全新数据卷。核对清单计数、公开/私密接口后启动；已有卷先备份，不覆盖正在运行的数据库。重复打包会从当前本地数据库生成新快照，包含之后在本地保存的站点改动。
 
 ## 结构与验证
 
 ```text
-src/                  React 前端和海报轮播
-src/public/posters/   本地海报资产
-server/               Node HTTP 服务与 D1/SQLite 兼容层
-worker/index.js       共享 API 实现及原 Worker 入口
-migrations/           SQLite / D1 本地建表基线
+src/app/              应用骨架：Providers、路由表、页头页脚
+src/pages/            每个路由一个目录（home、not-found）
+src/features/         导航（卡片、目录、编辑器）与登录会话
+src/shared/           接口封装、基础组件、设计令牌、纯函数、站点配置
+src/demo/             pnpm dev:demo 的浏览器内假后端
+server/               Node HTTP、API 路由、导航与鉴权服务、SQLite
+migrations/           SQLite 基线与版本化迁移
 scripts/import-d1.mjs 完整 SQL 快照导入（拒绝覆盖）
 scripts/package-server.mjs 提交源码与一致数据库快照打包
 tests/                API、隐私、图标、迁移回归
@@ -117,4 +158,4 @@ compose.yaml          bero/本地服务器容器配置
 deploy/               Nginx 示例
 ```
 
-`pnpm check` 执行测试、类型检查和构建。`frontend/` 继续随提交入库，Docker 也会从源码重新构建，避免旧 Worker 静态产物滞后。私密数据和凭据不进入版本管理。历史 `.local-archive/` 只供阅读，不是维护源码。
+`pnpm test` 运行 Node API、OAuth、SQLite 迁移、共享图标校验和首页筛选逻辑测试；`pnpm check` 再加类型检查和构建。Docker 在构建阶段生成 `frontend/`，运行镜像启动 Node 服务。私密数据和凭据存放在运行环境。

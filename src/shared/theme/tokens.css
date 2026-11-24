@@ -1,0 +1,107 @@
+/*
+ * 设计令牌。颜色与博客 app/theme.css 同源，保证 Navi 和博客首页的导航卡片看起来一致。
+ * 组件只引用这里的变量；新增主题 = 新增一组同名变量。
+ */
+:root {
+  color-scheme: light;
+  --bg: #fff;
+  --surface: #fffdf8;
+  --card: #fff;
+  --fg: #20211e;
+  --muted: #6d6a61;
+  --faint: #8c929a;
+  --border: #ddd6c9;
+  --accent: #3767d6;
+  --accent-strong: #163b6d;
+  --accent-soft: #dae5f5;
+  --panel: #e9ebee;
+  --success: #267344;
+  --danger: #9b4030;
+  --danger-soft: #f7e6e1;
+  --action-bg: #111;
+  --action-fg: #fff;
+  --action-border: #222;
+  --action-hover: #282828;
+  --private: #8a5a1c;
+  --private-soft: #f6eedf;
+  --star: #b7791f;
+  --shadow: rgb(0 0 0 / .22);
+  --veil: rgb(20 20 18 / .36);
+  /* 无图标时的字母底色：hsl(色相 饱和度 亮度)，色相由站点名算出 */
+  --mono-fg: 36%;
+  --mono-bg: 93%;
+  --mono-sat: 55%;
+
+  --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", Georgia, serif;
+  --font-sans: Inter, "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  --radius-card: 8px;
+  --radius-control: 8px;
+  --radius-panel: 14px;
+  --content-width: 1240px;
+  --gutter: clamp(16px, 3vw, 32px);
+  --header-height: 60px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #11151b;
+    --surface: #171d25;
+    --card: #191f27;
+    --fg: #eef1f6;
+    --muted: #b4bbc7;
+    --faint: #8c96a5;
+    --border: #3c4758;
+    --accent: #8bb5ff;
+    --accent-strong: #c4dcff;
+    --accent-soft: #213049;
+    --panel: #222a35;
+    --success: #9bdfb4;
+    --danger: #f5a296;
+    --danger-soft: #3a2320;
+    --action-bg: #06080b;
+    --action-fg: #fff;
+    --action-border: #4c586a;
+    --action-hover: #252d38;
+    --private: #e7c08a;
+    --private-soft: #2c2619;
+    --star: #f2c46d;
+    --shadow: rgb(0 0 0 / .55);
+    --veil: rgb(0 0 0 / .56);
+    --mono-fg: 78%;
+    --mono-bg: 22%;
+    --mono-sat: 28%;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #11151b;
+  --surface: #171d25;
+  --card: #191f27;
+  --fg: #eef1f6;
+  --muted: #b4bbc7;
+  --faint: #8c96a5;
+  --border: #3c4758;
+  --accent: #8bb5ff;
+  --accent-strong: #c4dcff;
+  --accent-soft: #213049;
+  --panel: #222a35;
+  --success: #9bdfb4;
+  --danger: #f5a296;
+  --danger-soft: #3a2320;
+  --action-bg: #06080b;
+  --action-fg: #fff;
+  --action-border: #4c586a;
+  --action-hover: #252d38;
+  --private: #e7c08a;
+  --private-soft: #2c2619;
+  --star: #f2c46d;
+  --shadow: rgb(0 0 0 / .55);
+  --veil: rgb(0 0 0 / .56);
+  --mono-fg: 78%;
+  --mono-bg: 22%;
+  --mono-sat: 28%;
+}
