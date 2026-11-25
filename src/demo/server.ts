@@ -2,43 +2,50 @@
  * pnpm dev:demo 用的浏览器内假后端：按 /api/v1 的约定返回数据，状态只在内存里。
  * 生产构建中 DEMO_MODE 为 false，这个模块不会被加载。
  */
-import type { Session } from "@/features/auth/api";
+import type { Role, Session } from "@/features/auth/api";
 import type { NavGroup, NavSite, NavigationData } from "@/features/navigation/types";
 import { ApiError, type HttpMethod } from "@/shared/api/http";
+import { SITE } from "@/shared/config/site";
 import { DEMO_FAVORITES, createDemoGroups } from "./data";
 
 const state = {
   groups: createDemoGroups(),
   favorites: [...DEMO_FAVORITES],
-  session: null as Session["user"],
+  session: null as { user: NonNullable<Session["user"]>; role: Exclude<Role, "guest">; blogRole?: "owner" | "member" } | null,
   nextId: 1000,
 };
 
-const methods = { blog: true, password: true };
+const methods = { blog: true, password: false };
+
+function blogLogoutUrl(): string {
+  return `${SITE.blogUrl}/logout?${new URLSearchParams({ return_to: window.location.origin })}`;
+}
 
 function sessionBody(): Session {
   return state.session
-    ? { authenticated: true, role: "admin", user: state.session, loginMethods: methods }
-    : { authenticated: false, role: "guest", user: null, loginMethods: methods };
+    ? { authenticated: true, role: state.session.role, user: state.session.user, blogRole: state.session.blogRole, loginMethods: methods, blogLogoutUrl: blogLogoutUrl() }
+    : { authenticated: false, role: "guest", user: null, loginMethods: methods, blogLogoutUrl: blogLogoutUrl() };
 }
 
 function requireAdmin() {
   if (!state.session) throw new ApiError(401, "UNAUTHORIZED", "请先登录。");
+  if (state.session.role !== "admin") throw new ApiError(403, "FORBIDDEN", "需要管理权限才能执行此操作。");
 }
 
 function navigation(): NavigationData {
-  const admin = Boolean(state.session);
+  const canSeePrivate = Boolean(state.session);
+  const admin = state.session?.role === "admin";
   const groups = state.groups
-    .filter((group) => admin || group.isPublic)
+    .filter((group) => canSeePrivate || group.isPublic)
     .sort((a, b) => a.order - b.order)
     .map((group) => ({
       ...group,
       sites: group.sites
-        .filter((site) => admin || site.isPublic)
+        .filter((site) => canSeePrivate || site.isPublic)
         .sort((a, b) => a.order - b.order)
         .map((site) => (admin ? { ...site } : (({ notes: _notes, ...rest }) => rest)(site))),
     }));
-  return { visibility: admin ? "private" : "public", groups, favorites: admin ? [...state.favorites] : [] };
+  return { visibility: canSeePrivate ? "private" : "public", groups, favorites: admin ? [...state.favorites] : [] };
 }
 
 function findGroup(id: number): NavGroup {
@@ -66,11 +73,12 @@ export async function handleDemoRequest(method: HttpMethod, path: string, body: 
   switch (route) {
     case "GET /session": return sessionBody();
     case "POST /auth/login":
-      if (!input.username || !input.password) throw new ApiError(401, "INVALID_CREDENTIALS", "账号或密码不正确。");
-      state.session = { name: String(input.username), method: "password" };
-      return sessionBody();
+      throw new ApiError(403, "PASSWORD_LOGIN_DISABLED", "密码登录未启用。");
     case "POST /auth/demo-blog":
-      state.session = { name: "KazeRush", method: "blog" };
+      state.session = { user: { name: "KazeRush", method: "blog" }, role: "viewer", blogRole: "owner" };
+      return sessionBody();
+    case "POST /auth/demo-blog-manage":
+      state.session = { user: { name: "KazeRush", method: "blog" }, role: "admin", blogRole: "owner" };
       return sessionBody();
     case "POST /auth/logout": state.session = null; return undefined;
     case "GET /navigation": return navigation();

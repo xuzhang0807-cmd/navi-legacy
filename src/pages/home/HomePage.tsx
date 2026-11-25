@@ -51,7 +51,7 @@ function useActiveSection(keys: string[]): [string | null, (key: string) => void
 
 export function HomePage() {
   const toast = useToast();
-  const { session, isAdmin, identityKey, openLogin, handleUnauthorized } = useSession();
+  const { session, isAdmin, canViewPrivate, identityKey, openLogin, handleUnauthorized } = useSession();
   const { editing } = useEditMode();
   const { state, reload, update } = useNavigation(identityKey);
   const [query, setQuery] = useState("");
@@ -59,7 +59,7 @@ export function HomePage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const data = state.status === "ready" ? state.data : null;
-  const view = useMemo(() => (data ? buildNavigationView(data, { asGuest: !isAdmin, query, includeEmptyGroups: editing }) : null), [data, isAdmin, query, editing]);
+  const view = useMemo(() => (data ? buildNavigationView(data, { asGuest: !canViewPrivate, query, includeEmptyGroups: editing }) : null), [data, canViewPrivate, query, editing]);
   const favorites = useMemo(() => new Set(data?.favorites ?? []), [data]);
   const groups = useMemo(() => [...(data?.groups ?? [])].sort(byOrder), [data]);
   const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
@@ -156,7 +156,7 @@ export function HomePage() {
         <Compass aria-hidden="true" />
         <strong>还没有公开的导航</strong>
         <p>站长还没有公开任何站点。</p>
-        {!session.authenticated && <button className="btn" type="button" onClick={openLogin}><LogIn />站长登录</button>}
+        {!session.authenticated && <button className="btn" type="button" onClick={openLogin}><LogIn />登录</button>}
       </div>
     );
   } else if (view) {
@@ -168,7 +168,7 @@ export function HomePage() {
             key={section.key}
             section={section}
             groupOf={groupOf}
-            showPrivacy={isAdmin}
+            showPrivacy={canViewPrivate}
             editing={editing}
             favorites={favorites}
             canReorder={!view.query && section.kind === "group"}
@@ -201,7 +201,7 @@ export function HomePage() {
           <dl className="home-stats">
             <div><dt>站点</dt><dd>{view.totals.sites}</dd></div>
             <div><dt>分类</dt><dd>{view.totals.groups}</dd></div>
-            {isAdmin && <div><dt>私密</dt><dd>{view.totals.privateSites}</dd></div>}
+            {canViewPrivate && <div><dt>私密</dt><dd>{view.totals.privateSites}</dd></div>}
           </dl>
         )}
       </section>
@@ -215,7 +215,7 @@ export function HomePage() {
             sections={view?.sections ?? []}
             activeKey={activeKey}
             query={query}
-            showPrivacy={isAdmin}
+            showPrivacy={canViewPrivate}
             editing={editing}
             onQueryChange={setQuery}
             onSelect={setActiveKey}

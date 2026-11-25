@@ -1,21 +1,22 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Eye, EyeOff, LogOut } from "lucide-react";
+import { Eye, EyeOff, LogOut, Pencil } from "lucide-react";
 import { useSession } from "@/features/auth/SessionProvider";
 
 function initials(name: string): string {
   const letters = [...name.trim()];
-  if (!letters.length) return "站";
+  if (!letters.length) return "用";
   return /^[a-z]/i.test(letters[0]) ? letters.slice(0, 2).join("").toUpperCase() : letters[0];
 }
 
-/** 站长头像菜单：显示登录方式、访客预览开关、退出。 */
+/** 已登录账号菜单：显示角色与登录方式、启用编辑、访客预览开关、退出。 */
 export function AccountMenu() {
-  const { session, previewAsGuest, setPreviewAsGuest, logout } = useSession();
+  const { session, isOwner, canEnableEdit, previewAsGuest, setPreviewAsGuest, enableEdit, logout } = useSession();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
-  const name = session?.user?.name || "站长";
-  const method = session?.user?.method === "blog" ? "通过博客账号登录" : "通过站长密码登录";
+  const name = session?.user?.name || (isOwner ? "站长" : "成员");
+  const roleLabel = isOwner ? "站长" : "成员";
+  const method = session?.user?.method === "blog" ? "通过 Xublog 账号登录" : "通过站长密码登录";
 
   useEffect(() => {
     if (!open) return;
@@ -34,9 +35,14 @@ export function AccountMenu() {
       </button>
       {open && (
         <div className="account-menu" id={menuId} role="menu">
-          <div className="account-who"><strong>{name}</strong><small>站长 · {method}</small></div>
+          <div className="account-who"><strong>{name}</strong><small>{roleLabel} · {method}</small></div>
+          {canEnableEdit && (
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); void enableEdit(); }}>
+              <Pencil />启用编辑
+            </button>
+          )}
           <button type="button" role="menuitem" onClick={() => { setPreviewAsGuest(!previewAsGuest); setOpen(false); }}>
-            {previewAsGuest ? <EyeOff /> : <Eye />}{previewAsGuest ? "返回站长视图" : "以访客身份预览"}
+            {previewAsGuest ? <EyeOff /> : <Eye />}{previewAsGuest ? (isOwner ? "返回站长视图" : "返回成员视图") : "以访客身份预览"}
           </button>
           <button type="button" role="menuitem" onClick={() => { setOpen(false); void logout(); }}>
             <LogOut />退出登录

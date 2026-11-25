@@ -68,7 +68,7 @@ export function NavSection({ section, groupOf, showPrivacy, editing, favorites, 
       <header className="nav-section-head">
         <h2 id={titleId}>{section.title}</h2>
         <span className="count">{section.sites.length} 个站点</span>
-        {showPrivacy && !section.isPublic && <span className="private-chip"><Lock />整个分类仅站长可见</span>}
+        {showPrivacy && !section.isPublic && <span className="private-chip"><Lock />整个分类仅登录后可见</span>}
         {editing && group && (
           <div className="nav-section-tools">
             <button type="button" onClick={() => onAddSite(group.id)}><Plus />添加站点</button>

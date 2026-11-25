@@ -40,7 +40,13 @@
 .preview-banner { background: var(--accent-soft); color: var(--accent-strong); font-size: 13px; }
 .preview-banner .site-container { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-block: 10px; }
 .preview-banner svg { width: 16px; height: 16px; }
-.preview-banner button { margin-left: auto; padding: 4px 12px; border: 1px solid currentColor; border-radius: 999px; background: transparent; color: inherit; font-size: 12px; }
+.preview-banner button, .preview-banner .banner-link {
+  padding: 4px 12px; border: 1px solid currentColor; border-radius: 999px;
+  background: transparent; color: inherit; font-size: 12px; text-decoration: none;
+}
+.preview-banner > .site-container > button { margin-left: auto; }
+.banner-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.banner-link { font-weight: 600; }
 
 .site-main { flex: 1; }
 

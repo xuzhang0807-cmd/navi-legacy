@@ -8,7 +8,7 @@ import { SITE } from "@/shared/config/site";
 import { AccountMenu } from "./AccountMenu";
 
 export function SiteHeader() {
-  const { session, isOwner, isAdmin, openLogin } = useSession();
+  const { session, isAuthenticated, isOwner, isAdmin, canEnableEdit, isBlogOwner, openLogin, enableEdit } = useSession();
   const { editing, setEditing } = useEditMode();
   const { theme, toggleTheme } = useTheme();
   const { pathname } = useLocation();
@@ -29,10 +29,15 @@ export function SiteHeader() {
               <Pencil /><span className="site-action-label">{editing ? "完成编辑" : "编辑"}</span>
             </button>
           )}
+          {!isOwner && canEnableEdit && isBlogOwner && pathname === "/" && (
+            <button className="btn" type="button" onClick={() => void enableEdit()}>
+              <Pencil /><span className="site-action-label">启用编辑</span>
+            </button>
+          )}
           <button className="icon-btn" type="button" onClick={toggleTheme} aria-label={theme === "dark" ? "切换到亮色" : "切换到暗色"} title={theme === "dark" ? "切换到亮色" : "切换到暗色"}>
             {theme === "dark" ? <Sun /> : <Moon />}
           </button>
-          {isOwner
+          {isAuthenticated
             ? <AccountMenu />
             : <button className="btn" type="button" onClick={openLogin} disabled={!session}><LogIn /><span className="site-action-label">登录</span></button>}
         </div>

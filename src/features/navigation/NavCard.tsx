@@ -46,7 +46,7 @@ export function NavCard({ site, isPrivate, showPrivacy, editing = false, favorit
       <div className="nav-card-head">
         <SiteIcon icon={site.icon} name={name} />
         <h3>{name}</h3>
-        {showPrivacy && isPrivate && <span className="nav-card-lock" title="私密：只有站长能看到"><Lock /><span>私密</span></span>}
+        {showPrivacy && isPrivate && <span className="nav-card-lock" title="私密：仅登录后可见"><Lock /><span>私密</span></span>}
       </div>
       {site.description && <p className="nav-card-note">{site.description}</p>}
       {editing && !preview && (
