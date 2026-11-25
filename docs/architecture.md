@@ -6,7 +6,8 @@
 
 - Navi 是站长一个人的导航站：一份分类与站点数据，按身份决定能看到多少。不是多租户系统；若以后要多人各自拥有导航，必须另加归属字段和逐查询授权。
 - **访客**：只看到「分类公开 且 站点公开」的站点，没有备注、收藏等站长数据。
-- **站长**：看到全部内容，可以增删改、排序、收藏。
+- **成员（`navi:use`）**：已通过博客登录的只读用户，看到公开及私密分类与站点，没有备注、收藏，不能修改导航。
+- **站长 / 编辑（`navi:manage`）**：看到全部内容（含备注与收藏），可以增删改、排序、收藏、导入导出。
 - 公开或私密由服务端过滤。前端隐藏、路由守卫都不能代替 API 授权；访客请求的响应里根本不应出现私密数据。
 - 博客首页的导航读的是同一份数据，卡片字段和样式与 Navi 保持一致（见第 6 节）。
 - 后端只跑 Node.js 24（`node:http` + `node:sqlite`），旧 Cloudflare Worker 入口已退役；`wrangler` 只保留给 D1 数据的只读导出。
@@ -76,10 +77,10 @@ frontend/                    Vite 构建产物（随提交入库，Docker 内会
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/session` | 返回当前身份 |
-| POST | `/api/v1/auth/login` | 站长密码登录，`{"username","password","remember"}` |
-| POST | `/api/v1/auth/logout` | 退出，撤销服务端会话；博客登录的会话同时尽力撤销博客端令牌。返回 204 |
-| GET | `/api/v1/auth/blog/start?returnTo=/路径` | 302 跳到博客授权页。`returnTo` 只接受以单个 `/` 开头的站内路径，否则用 `/` |
+| GET | `/api/v1/session` | 返回当前身份、可用登录方式及博客退出地址 |
+| POST | `/api/v1/auth/login` | 服务端紧急密码登录，`{"username","password","remember"}`（默认关闭，需 `AUTH_PASSWORD_LOGIN=true`，不在前端 UI 展示） |
+| POST | `/api/v1/auth/logout` | 退出，撤销服务端会话；博客登录的会话同时尽力撤销博客端令牌。返回 204；前端随后提供 `blogLogoutUrl`（「同时退出 Xublog」） |
+| GET | `/api/v1/auth/blog/start?returnTo=/路径[&scope=use\|manage]` | 302 跳到博客授权页。`returnTo` 只接受以单个 `/` 开头的站内路径，否则用 `/`；`scope` 默认 `use`（请求 `navi:use`），`manage` 请求 `navi:use navi:manage` |
 | GET | `/api/v1/auth/blog/callback` | 博客回跳。成功 302 到 `returnTo`；失败 302 到 `/?loginError=<代码>` |
 
 `GET /api/v1/session` 响应：
@@ -87,13 +88,15 @@ frontend/                    Vite 构建产物（随提交入库，Docker 内会
 ```json
 {
   "authenticated": true,
-  "role": "admin",
+  "role": "viewer",
   "user": { "name": "KazeRush", "method": "blog" },
-  "loginMethods": { "blog": true, "password": true }
+  "blogRole": "owner",
+  "loginMethods": { "blog": true, "password": false },
+  "blogLogoutUrl": "https://zxublog.com/logout?return_to=https%3A%2F%2Fdh.kazerush.xyz"
 }
 ```
 
-访客为 `{"authenticated":false,"role":"guest","user":null,"loginMethods":{...}}`。`loginMethods.blog` 只在博客 OAuth 配置完整时为 true；`loginMethods.password` 由 `AUTH_PASSWORD_LOGIN` 控制。
+`role` 为 `"guest"`（匿名访客）、`"viewer"`（持有 `navi:use`，私密只读）或 `"admin"`（持有 `navi:manage` 或紧急密码会话，可编辑）。访客为 `{"authenticated":false,"role":"guest","user":null,"loginMethods":{...}}`。`loginMethods.blog` 只在博客 OAuth 配置完整时为 true；`loginMethods.password` 由 `AUTH_PASSWORD_LOGIN` 控制（默认 false）。配置了博客 OAuth 时返回 `blogLogoutUrl`（`<BLOG_OAUTH_ISSUER>/logout?return_to=<PUBLIC_ORIGIN>`）。`blogRole`（`"owner" | "member"`）仅作界面提示，权限完全由 OAuth `scopes` 决定。
 
 `loginError` 代码：`STATE_MISMATCH`、`ACCESS_DENIED`、`MISSING_PERMISSION`、`BLOG_UNAVAILABLE`、`LOGIN_FAILED`。
 
@@ -122,7 +125,8 @@ frontend/                    Vite 构建产物（随提交入库，Docker 内会
 ```
 
 - 访客：`visibility` 为 `"public"`，私密分类整组不出现，私密站点不出现，所有站点都没有 `notes` 字段，`favorites` 为 `[]`。
-- 站长：`visibility` 为 `"private"`，返回全部数据和 `notes`、`favorites`。
+- 成员（`viewer`）：`visibility` 为 `"private"`，返回公开与私密分类／站点，但所有站点都没有 `notes` 字段，`favorites` 为 `[]`；调用站长写接口或导出接口返回 `403 FORBIDDEN`。
+- 站长（`admin`）：`visibility` 为 `"private"`，返回全部数据和 `notes`、`favorites`。
 - `groups` 按 `order` 升序，组内 `sites` 按 `order` 升序。`icon` 为 `null`、短文字（≤8 字符）、`http(s)://` 图片地址、站内相对路径（以单个 `/` 开头）或 `data:image/...;base64,...`，规则以 `src/shared/lib/site-icons.ts` 为准。
 
 ### 4.3 站长写接口
@@ -168,45 +172,51 @@ frontend/                    Vite 构建产物（随提交入库，Docker 内会
 - 密码会话：默认 12 小时，勾选「保持登录」为 30 天。博客会话：最长 30 天，并受第 5.3 节的复核约束。
 - 登录接口按客户端 IP 限流（真实 IP 规则见 README 的 `TRUST_PROXY` 说明）。
 
-### 5.2 站长密码登录（备用）
+### 5.2 站长密码登录（紧急服务端备用）
 
-沿用 `AUTH_USERNAME` / `AUTH_PASSWORD`。`AUTH_PASSWORD_LOGIN=false` 时关闭，此时只能用博客账号登录。生产环境必须至少开启一种登录方式。
+沿用 `AUTH_USERNAME` / `AUTH_PASSWORD`，由 `AUTH_PASSWORD_LOGIN` 控制且**默认关闭（`false`）**。前端登录对话框永远不显示密码表单，用户只在博客域名输入凭据。仅在紧急排障时可在服务端显式设置 `AUTH_PASSWORD_LOGIN=true` 启用 `POST /api/v1/auth/login`。生产环境必须至少开启一种登录方式。
 
 修改站长用户名、密码或 `AUTH_SECRET` 会使所有密码登录会话失效。
 
 ### 5.3 博客账号登录（OAuth 2.1 授权码 + PKCE）
 
-Navi 是博客 OAuth 的机密客户端（`client_secret_post`），通过博客已有的动态注册接口注册一次，凭据写入 Navi 的 `.env`。
+Navi 是博客 OAuth 的机密客户端（`client_secret_post`），通过博客已有的动态注册接口注册一次并在博客后台绑定为第一方客户端，凭据写入 Navi 的 `.env`。
 
 ```text
-浏览器 → GET /api/v1/auth/blog/start
+浏览器 → GET /api/v1/auth/blog/start?returnTo=…（常规登录）
        ← 302 {BLOG_OAUTH_ISSUER}/oauth/authorize
            ?response_type=code&client_id=…&redirect_uri={PUBLIC_ORIGIN}/api/v1/auth/blog/callback
-           &scope=navi:manage&resource={BLOG_OAUTH_ISSUER}/api/identity
+           &scope=navi:use&resource={BLOG_OAUTH_ISSUER}/api/identity
            &code_challenge=…&code_challenge_method=S256&state=…
-         （state、code_verifier、returnTo 存在 10 分钟有效的签名 Cookie navi_oauth，HttpOnly，SameSite=Lax）
-博客   → 登录（如未登录）→ 同意授权 → 302 回 redirect_uri?code=…&state=…
+         （state、code_verifier、requestedScope、returnTo 存在 10 分钟有效的签名 Cookie navi_oauth，HttpOnly，SameSite=Lax）
+博客   → 登录或邀请码注册（如未登录）→ 第一方跳过同意页 → 302 回 redirect_uri?code=…&state=…
 Navi   → 校验 state → POST {BLOG_OAUTH_INTERNAL_URL}/oauth/token（换取 access_token + refresh_token）
        → GET  {BLOG_OAUTH_INTERNAL_URL}/api/identity/me（Bearer access_token）
-       → 返回含 navi:manage 才创建站长会话，否则 loginError=MISSING_PERMISSION
+       → 按返回 scopes 映射角色：含 navi:manage → admin，仅含 navi:use → viewer，均无 → loginError=MISSING_PERMISSION
+
+启用编辑（已登录 viewer 按需发起二次授权）：
+浏览器 → GET /api/v1/auth/blog/start?scope=manage&returnTo=…
+       ← 302 {BLOG_OAUTH_ISSUER}/oauth/authorize?...&scope=navi:use+navi:manage&...
+       → 回调要求 scopes 含 navi:manage，否则 loginError=MISSING_PERMISSION 且保留原 viewer 会话
 ```
 
 博客端约定（博客仓库实现）：
 
-- 新增账号能力 `navi:manage`（「管理 Navi 导航」，`features` 组，管理员自动拥有，`memberGrantable: false`）。
-- 新增 OAuth 资源 `{博客公开来源}/api/identity`。`navi:manage` 只能与这个资源一起申请；原有 MCP scope 只能与 MCP 资源一起申请。
+- 应用目录登记 `navi:use`（「使用导航」，登录并查看私密导航）和 `navi:manage`（「管理导航」，编辑导航），管理员自动拥有，成员逐项勾选。
+- OAuth 资源 `{博客公开来源}/api/identity`。博客在请求包含账号未持有的 scope 时会拒绝整次授权（且 `optionalScopes` 仅用于博客内置网关客户端），因此 Navi 首次登录只申请 `navi:use`，需要编辑时再通过 `?scope=manage` 申请 `navi:use navi:manage`。
 - `GET /api/identity/me`，`Authorization: Bearer <access_token>`：
-  - 200 `{"sub":"<博客账号 id>","name":"<昵称或用户名>","scopes":["navi:manage"]}`；
-  - 令牌无效、过期、授权已撤销或账号 epoch 变化 → 401；令牌缺少 `navi:manage` → 403。
+  - 200 `{"sub":"<博客账号 id>","name":"<昵称或用户名>","username":"<用户名>","role":"owner|member","scopes":["navi:use", ...]}`；
+  - 令牌无效、过期、授权已撤销或账号 epoch 变化 → 401；
   - `Cache-Control: no-store`。
 - 令牌、刷新轮换、重放检测、撤销沿用博客现有实现（access 15 分钟，refresh 30 天，刷新即轮换）。
+- 博客提供 `GET /logout?return_to=<Navi 精确公开源>` 确认页；Navi 退出本地会话并撤销 grant 后向用户提供「同时退出 Xublog」链接。
 
 Navi 端复核：
 
-- `refresh_token` 用 AES-256-GCM 加密后存在会话行里，密钥由 `AUTH_SECRET` 派生。
-- 站长请求时，若距上次复核超过 5 分钟：用 refresh_token 换新令牌并再次调用 `/api/identity/me`。同一会话的刷新必须串行（避免两次并发刷新触发博客的重放检测）。
-- 复核得到 `invalid_grant`、401 或 403 → 删除会话，本次请求按访客处理。博客暂时不可达 → 保留会话但本次请求按访客处理（导航读接口返回公开数据，导航写接口 503），不放行。
-- 博客端修改密码、角色、权限或撤销授权后，最迟 5 分钟内 Navi 失去站长身份。
+- `refresh_token` 用 AES-256-GCM 加密后存在会话行里，密钥由 `AUTH_SECRET` 派生；会话行同时记录 `role`（`viewer` / `admin`）与 `blog_role`。
+- 携带博客会话请求时，若距上次复核超过 5 分钟：用 refresh_token 换新令牌并再次调用 `/api/identity/me`。同一会话的刷新必须串行（避免两次并发刷新触发博客的重放检测）。
+- 复核得到 `invalid_grant`、401、403，或原会话所需能力被撤销（`admin` 失去 `navi:manage`，或 `viewer` 失去 `navi:use`）→ 删除会话，本次请求按访客处理。博客暂时不可达 → 保留会话但本次请求按访客处理（导航读接口返回公开数据，导航写接口 503），不放行。
+- 博客端修改密码、角色、权限或撤销授权后，最迟 5 分钟内 Navi 结束会话。
 
 `redirect_uri` 只由配置推导（`PUBLIC_ORIGIN`，开发环境缺省 `http://localhost:5173`），不得取自请求头。
 

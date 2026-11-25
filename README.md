@@ -9,23 +9,24 @@
 ```bash
 pnpm install --frozen-lockfile
 cp .env.example .dev.vars
-# 编辑 .dev.vars，填写 AUTH_USERNAME、AUTH_PASSWORD、随机 AUTH_SECRET。
+# 编辑 .dev.vars，填写随机 AUTH_SECRET 与博客 OAuth 配置（或紧急调试时设置 AUTH_PASSWORD_LOGIN=true 及 AUTH_USERNAME/AUTH_PASSWORD）。
 # 本地使用 PUBLIC_ORIGIN=http://localhost:5173 和 NODE_ENV=development。
 pnpm dev:server  # http://localhost:8787，自动初始化 .local-data/navi.sqlite
 pnpm dev         # http://localhost:5173，/api 代理到 8787
 pnpm test
 ```
 
-`pnpm start` 用于已构建的服务器运行环境，读取 `.env`。`pnpm dev:server` 读取 `.dev.vars` 和 `.env.local`，使用 Node watch。现有具有站长用户名和密码的 `.dev.vars` 可直接启用密码登录，开发来源默认是 `http://localhost:5173`。验证本地登录时从 `pnpm dev` 打开的地址访问。本地 SQLite 独立于历史 D1。
+`pnpm start` 用于已构建的服务器运行环境，读取 `.env`。`pnpm dev:server` 读取 `.dev.vars` 和 `.env.local`，使用 Node watch。开发来源默认是 `http://localhost:5173`。验证本地登录时从 `pnpm dev` 打开的地址访问。本地 SQLite 独立于历史 D1。
 
-`pnpm dev:demo` 只启动前端，用 `src/demo/` 里的浏览器内假后端和示例数据，不调用 `/api`。点「登录 → 用博客账号登录」即可切到站长视图，适合单独改页面。
+`pnpm dev:demo` 只启动前端，用 `src/demo/` 里的浏览器内假后端和示例数据，不调用 `/api`。点「登录 → 使用 Xublog 账号登录」可切到只读成员视图，再点「启用编辑」切到站长视图，适合单独改页面。
 
 ### 页面
 
 首页是刊物式布局：页头（博客外链、导航、规划中的资讯），简介和统计，左侧目录与搜索（按 `/` 聚焦，匹配分类名、站点名、介绍、网址，站长视图还匹配备注），右侧按分类展示卡片。卡片规格与博客首页导航卡片一致（见 [架构约定第 6 节](docs/architecture.md)）。
 
 - 访客：只看到公开分类里的公开站点，由服务端过滤。
-- 站长：私密内容带虚线框和锁标记；页头「编辑」进入编辑模式，可点卡片在右侧抽屉里修改、拖动或用方向键排序、收藏、增删分类。头像菜单可切到「以访客身份预览」。
+- 成员（`navi:use`）：看到公开及私密分类与站点（只读，不含站长备注与收藏），头像菜单可切到「以访客身份预览」。
+- 站长（`navi:manage`）：在成员基础上查看备注、收藏并启用编辑模式，可点卡片在右侧抽屉里修改、拖动或用方向键排序、收藏、增删分类。
 - 站点图标可以按网址自动获取、填图片地址或短文字、上传图片（≤256 KB），加载失败时显示名称首字。网址可省略 `https://`。
 - 亮色和暗色跟随系统，也可在页头切换。
 
@@ -46,13 +47,13 @@ GET /api/integrations/blog/navigation
 - 错误凭据返回 401；这个凭据没有 Navi 管理或写入权限。
 - 响应不含管理员 `notes`，并禁止缓存。
 
-博客设置 `NAVI_INTERNAL_URL=http://navi:8787` 和 `NAVI_INTEGRATION_TOKEN`，Navi 的 `BLOG_NAVIGATION_TOKEN` 使用同一个值。令牌只写入服务端环境。博客首页的可见范围由博客会话决定。Navi 编辑权限通过站长密码或博客 OAuth 的 `navi:manage` 能力授予。
+博客设置 `NAVI_INTERNAL_URL=http://navi:8787` 和 `NAVI_INTEGRATION_TOKEN`，Navi 的 `BLOG_NAVIGATION_TOKEN` 使用同一个值。令牌只写入服务端环境。博客首页的可见范围由博客会话决定。Navi 通过博客 OAuth 统一登录：`navi:use` 授予私密导航只读查看权限，`navi:manage` 授予编辑与管理权限。
 
 本地对接时，博客开发进程设置 `NAVI_INTERNAL_URL=http://127.0.0.1:8787`。生产两个 Compose 通过 `navi-blog-link` 外部网络互通，可用双方一致的 `NAVI_NETWORK` 覆盖名称。博客用 `NAVI_PUBLIC_ORIGIN=https://dh.kazerush.xyz` 解析站内图标路径。
 
 ## 配置博客 OAuth 登录
 
-在博客启用 `navi:manage` 和 `/api/identity/me` 后，向现有 `POST /oauth/register` 注册一次客户端。以下命令将注册响应写入受限文件。
+Navi 仅通过博客（Xublog）登录，前端不提供账号密码表单，凭据只在博客域名输入。在博客启用 `navi:use`、`navi:manage` 和 `/api/identity/me` 后，向现有 `POST /oauth/register` 注册一次客户端（并在博客后台「应用接入 → 导航 Navi」绑定该 `client_id` 与公开地址，以便第一方客户端跳过同意页）。以下命令将注册响应写入受限文件。
 
 ```bash
 umask 077
@@ -74,11 +75,13 @@ curl --fail --silent --show-error \
 
 把注册响应中的 `client_id` 和 `client_secret` 写入 Navi 服务器的 `.env` 中的 `BLOG_OAUTH_CLIENT_ID` 与 `BLOG_OAUTH_CLIENT_SECRET`。设置 `BLOG_OAUTH_ISSUER=https://zxublog.com`、`BLOG_OAUTH_INTERNAL_URL=http://xublog:3100`，以及 `PUBLIC_ORIGIN=https://dh.kazerush.xyz`。浏览器访问公开授权页，Navi 容器通过共享网络向 `xublog` 换令牌、复核身份和撤销授权。妥善保存客户端密钥与随机 `AUTH_SECRET`，清理临时注册响应。
 
+- **Scope 策略**：常规登录（`/api/v1/auth/blog/start`）只申请 `navi:use`，登录后可查看私密导航（只读）；需要编辑时再点「启用编辑」（`/api/v1/auth/blog/start?scope=manage`）申请 `navi:use navi:manage`。博客在请求包含账号未持有的 scope 时会拒绝整次授权，因此分两步申请可保证仅持有 `navi:use` 的成员顺利登录。
+- **退出登录**：在 Navi 点「退出登录」会先结束 Navi 会话并撤销当前 OAuth 授权，随后提供「同时退出 Xublog」链接（`<BLOG_OAUTH_ISSUER>/logout?return_to=<PUBLIC_ORIGIN>`）。
+- **紧急密码备用开关**：`AUTH_PASSWORD_LOGIN` 默认为 `false`（关闭），且正常 UI 永不渲染密码表单。仅在紧急运维需要直接调用 `POST /api/v1/auth/login` 时才临时设置 `AUTH_PASSWORD_LOGIN=true` 并填写 `AUTH_USERNAME` 和 `AUTH_PASSWORD`。升级旧数据库时，即使关闭密码登录，首次启动仍可用 `AUTH_USERNAME` 指定原站长用户名以迁移收藏。
+
 本地对接开发博客时，在 `.dev.vars` 或 `.env.local` 填写该环境的 OAuth 配置，从登记过的 `http://localhost:5173` 发起登录。若省略 `BLOG_OAUTH_INTERNAL_URL`，后端调用配置的公开发行方。
 
 本地博客要用生产构建运行（`npm run build` 后 `node --env-file=.env.local dist/standalone/server.js`，并设 `XUBLOG_SESSION_COOKIE_SECURE=true`）。`vinext dev` 在 workerd 里写不了审计日志，客户端注册和授权会返回 500。浏览器把 `http://localhost` 视为安全上下文，Secure Cookie 在本地可用。
-
-`AUTH_PASSWORD_LOGIN=false` 可切换到仅博客登录。保留密码登录时，填写 `AUTH_USERNAME` 和 `AUTH_PASSWORD`。旧 Worker 的 bcrypt 配置需更新为站长密码，或采用仅博客登录。升级旧数据库时，即使关闭密码登录，首次启动也要用 `AUTH_USERNAME` 指定原站长用户名以迁移收藏。
 
 ## bero 部署
 
