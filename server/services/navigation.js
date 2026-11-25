@@ -45,16 +45,18 @@ function requireCompleteOrder(ids, existing) {
 export function createNavigationService(store, now) {
   return {
     navigation(viewer) {
+      const canSeePrivate = viewer.role === 'admin' || viewer.role === 'viewer';
       const admin = viewer.role === 'admin';
       return {
-        visibility: admin ? 'private' : 'public',
-        groups: combine(store.list(admin, admin), groupJson, site => siteJson(site, admin)),
+        visibility: canSeePrivate ? 'private' : 'public',
+        groups: combine(store.list(canSeePrivate, admin), groupJson, site => siteJson(site, admin)),
         favorites: admin ? store.favorites() : [],
       };
     },
     legacy(viewer) {
+      const canSeePrivate = viewer.role === 'admin' || viewer.role === 'viewer';
       const admin = viewer.role === 'admin';
-      return combine(store.list(admin, admin), group => group, site => ({
+      return combine(store.list(canSeePrivate, admin), group => group, site => ({
         ...site,
         icon: site.icon || '',
         description: site.description || '',

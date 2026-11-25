@@ -204,6 +204,7 @@ test('production checks required settings before opening the DB and uses secure 
   assert.throws(() => startup({ BLOG_NAVIGATION_TOKEN: '' }), /BLOG_NAVIGATION_TOKEN/);
   assert.throws(() => startup({ BLOG_NAVIGATION_TOKEN: env.AUTH_SECRET }), /must be distinct/);
   assert.throws(() => startup({ AUTH_PASSWORD_LOGIN: 'false' }), /at least one login method/);
+  assert.throws(() => startup({ AUTH_PASSWORD_LOGIN: '' }), /at least one login method/);
   assert.throws(() => startup({ AUTH_PASSWORD_LOGIN: 'true', AUTH_PASSWORD: '' }), /AUTH_PASSWORD/);
   assert.throws(() => startup({ BLOG_OAUTH_ISSUER: 'https://blog.example' }), /BLOG_OAUTH_CLIENT_ID/);
   assert.throws(() => startup({
@@ -211,6 +212,13 @@ test('production checks required settings before opening the DB and uses secure 
   }), /BLOG_OAUTH_ISSUER/);
   const { login } = await navi(t, { env });
   assert.ok((await login()).response.headers.get('set-cookie').includes('; Secure'));
+});
+
+test('password login defaults to disabled even when credentials are present unless AUTH_PASSWORD_LOGIN=true', async t => {
+  assert.equal(readConfig({ AUTH_USERNAME: 'owner', AUTH_PASSWORD: 'fixture-password' }).passwordLogin, false);
+  const { api } = await navi(t, { env: { AUTH_PASSWORD_LOGIN: '' } });
+  assert.deepEqual((await api(`${v1}/session`)).data.loginMethods, { blog: false, password: false });
+  expectError(await api(`${v1}/auth/login`, { method: 'POST', body: loginBody }), 403, 'PASSWORD_LOGIN_DISABLED');
 });
 
 test('development reports the enabled login methods and ignores legacy authorization flags', async t => {

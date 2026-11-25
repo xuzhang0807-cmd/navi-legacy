@@ -21,7 +21,7 @@ function respond(response, status, data) {
 
 async function fakeBlog(t) {
   const state = {
-    scope: ['navi:manage'], name: 'Blog Owner', subject: 'blog-owner-id',
+    scope: ['navi:use', 'navi:manage'], name: 'Blog Owner', subject: 'blog-owner-id', blogRole: 'owner',
     tokenCalls: 0, refreshCalls: 0, identityCalls: 0, revokeCalls: 0, badRequests: 0, replays: 0,
   };
   let sequence = 0;
@@ -32,7 +32,12 @@ async function fakeBlog(t) {
       if (request.url === '/api/identity/me' && request.method === 'GET') {
         state.identityCalls++;
         if (!access || request.headers.authorization !== `Bearer ${access}`) return respond(response, 401, {});
-        return respond(response, state.identityStatus || 200, { sub: state.subject, name: state.name, scopes: state.scope });
+        return respond(response, state.identityStatus || 200, {
+          sub: state.subject,
+          name: state.name,
+          role: state.blogRole,
+          scopes: state.scope,
+        });
       }
       if (request.method !== 'POST' || !['/oauth/token', '/oauth/revoke'].includes(request.url)) {
         state.badRequests++;
@@ -83,7 +88,7 @@ async function fakeBlog(t) {
       refresh = issued.refresh_token;
       state.latestRefresh = () => refresh;
       if (grant === 'refresh_token' && state.delayRefresh) await state.delayRefresh();
-      return respond(response, 200, { ...issued, token_type: 'Bearer', scope: 'navi:manage', expires_in: 900 });
+      return respond(response, 200, { ...issued, token_type: 'Bearer', scope: state.scope.join(' '), expires_in: 900 });
     } catch {
       return respond(response, 500, {});
     }
@@ -105,8 +110,10 @@ async function scenario(t, overrides = {}) {
   provider.state.redirectUri = `${env.PUBLIC_ORIGIN || 'http://localhost:5173'}${callbackPath}`;
   seedNavigation(app.database);
 
-  async function start(returnTo = '/folder?q=导航#part') {
-    const { response } = await app.api(`${startPath}?returnTo=${encodeURIComponent(returnTo)}`, {
+  async function start(returnTo = '/folder?q=导航#part', scopePreset) {
+    const startQuery = new URLSearchParams({ returnTo });
+    if (scopePreset !== undefined) startQuery.set('scope', scopePreset);
+    const { response } = await app.api(`${startPath}?${startQuery}`, {
       headers: { Host: 'malicious.example:9000', 'X-Forwarded-Proto': 'http', 'X-Forwarded-Host': 'malicious.example' },
     });
     assert.equal(response.status, 302);
@@ -118,7 +125,7 @@ async function scenario(t, overrides = {}) {
     assert.equal(query.get('response_type'), 'code');
     assert.equal(query.get('client_id'), clientId);
     assert.equal(query.get('redirect_uri'), provider.state.redirectUri);
-    assert.equal(query.get('scope'), 'navi:manage');
+    assert.equal(query.get('scope'), scopePreset === 'manage' ? 'navi:use navi:manage' : 'navi:use');
     assert.equal(query.get('resource'), `${publicIssuer}/api/identity`);
     assert.equal(query.get('code_challenge_method'), 'S256');
     assert.ok(/^[A-Za-z0-9_-]{43}$/.test(query.get('code_challenge')));
@@ -131,16 +138,17 @@ async function scenario(t, overrides = {}) {
     return { state: query.get('state'), cookie: responseCookie(response, 'navi_oauth') };
   }
 
-  async function callback(flow, { state = flow.state, cookie = flow.cookie, error } = {}) {
+  async function callback(flow, { state = flow.state, cookie = flow.cookie, error, sessionCookie } = {}) {
     const query = new URLSearchParams({ state, ...(error ? { error } : { code }) });
-    const { response } = await app.api(`${callbackPath}?${query}`, { headers: { Cookie: cookie } });
+    const headers = { Cookie: [cookie, sessionCookie].filter(Boolean).join('; ') };
+    const { response } = await app.api(`${callbackPath}?${query}`, { headers });
     assert.equal(response.status, 302);
     assert.ok(response.headers.getSetCookie().some(value => value.startsWith('navi_oauth=; Max-Age=0')));
     return { response, location: response.headers.get('location'), cookie: responseCookie(response, 'navi_session') };
   }
 
-  async function loginBlog(returnTo) {
-    const result = await callback(await start(returnTo));
+  async function loginBlog(returnTo, scopePreset) {
+    const result = await callback(await start(returnTo, scopePreset));
     assert.ok(result.cookie, 'A valid OAuth callback has a session cookie.');
     return result;
   }
@@ -155,7 +163,8 @@ test('blog OAuth performs PKCE, creates a secure session and shares the owner fa
   });
   const session = await app.get(sessionPath);
   assert.deepEqual(session.data.loginMethods, { blog: true, password: false });
-  const login = await app.loginBlog();
+  assert.equal(session.data.blogLogoutUrl, `${publicIssuer}/logout?return_to=https%3A%2F%2Fnavi.example`);
+  const login = await app.loginBlog(undefined, 'manage');
   assert.equal(login.location, '/folder?q=%E5%AF%BC%E8%88%AA#part');
   assert.ok(login.response.headers.getSetCookie().some(value => value.startsWith('navi_session=') && value.includes('; Secure')));
   assert.equal(app.provider.tokenCalls, 1);
@@ -202,8 +211,12 @@ test('OAuth returnTo only redirects to paths on the configured site', async t =>
   }
 });
 
-test('OAuth requires the navi:manage capability from /api/identity/me', async t => {
+test('OAuth requires navi:use or navi:manage from /api/identity/me and rejects invalid scope presets', async t => {
   const app = await scenario(t);
+  const invalidScope = await app.api(`${startPath}?scope=invalid`);
+  assert.equal(invalidScope.response.status, 400);
+  assert.equal(invalidScope.data.error.code, 'INVALID_INPUT');
+
   app.provider.scope = ['mcp:read'];
   for (const status of [200, 403]) {
     app.provider.identityStatus = status;
@@ -211,6 +224,94 @@ test('OAuth requires the navi:manage capability from /api/identity/me', async t 
     assert.equal(result.location, '/?loginError=MISSING_PERMISSION');
     assert.equal(result.cookie, undefined);
   }
+  assert.equal(app.database.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, 0);
+});
+
+test('navi:use grants read-only viewer access to private navigation without notes, favorites or writes', async t => {
+  const app = await scenario(t);
+  app.provider.scope = ['navi:use'];
+  app.provider.blogRole = 'owner'; // Even if Blog role is owner, edit permission comes strictly from navi:manage scope.
+  const login = await app.loginBlog('/');
+  const session = await app.get(sessionPath, login.cookie);
+  assert.deepEqual(session.data, {
+    authenticated: true,
+    role: 'viewer',
+    user: { name: 'Blog Owner', method: 'blog' },
+    blogRole: 'owner',
+    loginMethods: { blog: true, password: true },
+    blogLogoutUrl: `${publicIssuer}/logout?return_to=http%3A%2F%2Flocalhost%3A5173`,
+  });
+
+  const nav = await app.get(navigationPath, login.cookie);
+  assert.equal(nav.data.visibility, 'private');
+  assert.deepEqual(nav.data.groups.map(group => group.id), [2, 1, 3]);
+  assert.deepEqual(nav.data.groups.flatMap(group => group.sites).map(site => site.id), [20, 11, 10]);
+  assert.ok(nav.data.groups.flatMap(group => group.sites).every(site => !Object.hasOwn(site, 'notes')));
+  assert.deepEqual(nav.data.favorites, []);
+
+  const legacy = await app.get('/api/groups-with-sites', login.cookie);
+  assert.deepEqual(legacy.data.map(group => group.id), [2, 1, 3]);
+  assert.ok(legacy.data.flatMap(group => group.sites).every(site => !Object.hasOwn(site, 'notes')));
+  assert.deepEqual((await app.get('/api/auth/status', login.cookie)).data, { authenticated: true });
+
+  for (const [method, path, body] of [
+    ['POST', '/api/v1/groups', { name: 'Denied', isPublic: true }],
+    ['PATCH', '/api/v1/sites/10', { name: 'Denied' }],
+    ['PUT', '/api/v1/favorites/10', undefined],
+    ['GET', '/api/v1/export', undefined],
+    ['POST', '/api/v1/import', { version: 2, groups: [], sites: [], favorites: [] }],
+  ]) {
+    const denied = await app.api(path, { method, body, headers: { Cookie: login.cookie } });
+    assert.equal(denied.response.status, 403);
+    assert.equal(denied.data.error.code, 'FORBIDDEN');
+  }
+});
+
+test('viewer can upgrade to admin via scope=manage and keeps viewer session if manage is missing', async t => {
+  const app = await scenario(t);
+  app.provider.scope = ['navi:use'];
+  app.provider.blogRole = 'member';
+  const viewerLogin = await app.loginBlog('/');
+  assert.equal((await app.get(sessionPath, viewerLogin.cookie)).data.role, 'viewer');
+
+  // Requesting manage when Blog only grants navi:use fails with MISSING_PERMISSION and preserves the viewer session.
+  const deniedUpgrade = await app.callback(await app.start('/', 'manage'), { sessionCookie: viewerLogin.cookie });
+  assert.equal(deniedUpgrade.location, '/?loginError=MISSING_PERMISSION');
+  assert.equal(deniedUpgrade.cookie, undefined);
+  assert.equal((await app.get(sessionPath, viewerLogin.cookie)).data.role, 'viewer');
+
+  // Once Blog grants navi:manage, upgrading replaces the session with admin.
+  app.provider.scope = ['navi:use', 'navi:manage'];
+  const upgraded = await app.callback(await app.start('/folder', 'manage'), { sessionCookie: viewerLogin.cookie });
+  assert.equal(upgraded.location, '/folder');
+  assert.ok(upgraded.cookie);
+  assert.equal((await app.get(sessionPath, upgraded.cookie)).data.role, 'admin');
+  assert.equal((await app.get(sessionPath, viewerLogin.cookie)).data.role, 'guest');
+  const nav = await app.get(navigationPath, upgraded.cookie);
+  assert.equal(nav.data.groups[1].sites[1].notes, 'Owner note');
+  assert.deepEqual(nav.data.favorites, [11]);
+});
+
+test('revoking navi:manage or navi:use during recheck ends the Navi session', async t => {
+  const app = await scenario(t);
+  app.provider.scope = ['navi:use', 'navi:manage'];
+  const adminLogin = await app.loginBlog('/', 'manage');
+  assert.equal((await app.get(sessionPath, adminLogin.cookie)).data.role, 'admin');
+
+  // Revoking navi:manage ends the admin session even if navi:use remains on the response.
+  app.advance(5 * 60 * 1000 + 1);
+  app.provider.scope = ['navi:use'];
+  assert.equal((await app.get(sessionPath, adminLogin.cookie)).data.role, 'guest');
+  assert.equal(app.database.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, 0);
+
+  // Revoking navi:use ends a viewer session.
+  const viewerLogin = await app.loginBlog('/');
+  assert.equal((await app.get(sessionPath, viewerLogin.cookie)).data.role, 'viewer');
+  app.advance(5 * 60 * 1000 + 1);
+  app.provider.scope = [];
+  const publicNav = await app.get(navigationPath, viewerLogin.cookie);
+  assert.equal(publicNav.data.visibility, 'public');
+  assert.equal((await app.get(sessionPath, viewerLogin.cookie)).data.role, 'guest');
   assert.equal(app.database.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, 0);
 });
 

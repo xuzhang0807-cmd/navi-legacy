@@ -106,6 +106,7 @@ export async function serve(t, server) {
 
 export const authEnv = {
   NODE_ENV: 'test',
+  AUTH_PASSWORD_LOGIN: 'true',
   AUTH_USERNAME: 'owner',
   AUTH_PASSWORD: 'fixture-password',
   AUTH_SECRET: 'fixture-auth-secret-with-more-than-32-characters',

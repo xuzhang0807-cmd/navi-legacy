@@ -40,7 +40,8 @@ export function createV1Routes(config, auth, navigation) {
     }],
     [/^\/auth\/blog\/start$/, {
       GET: { handle({ query }) {
-        const login = auth.startBlog(queryValue(query, 'returnTo'));
+        const requestedScope = query.has('scope') ? queryValue(query, 'scope') : 'use';
+        const login = auth.startBlog(queryValue(query, 'returnTo'), requestedScope);
         return flow(redirect(login.location), login.stateCookie, stateLifetime);
       } },
     }],

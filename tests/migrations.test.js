@@ -38,7 +38,7 @@ test('versioned SQLite migrations preserve the original rows and import only the
   let database = openDatabase(copy, { legacyOwner: 'owner' });
   try {
     assert.deepEqual(contents(database), data);
-    assert.deepEqual(database.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(row => row.version), [1, 2, 3]);
+    assert.deepEqual(database.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(row => row.version), [1, 2, 3, 4]);
     assert.deepEqual({ ...database.prepare('SELECT * FROM owner_favorites').get() }, { site_id: 21, created_at: '2025-01-01' });
     assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), []);
     assert.equal(database.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');

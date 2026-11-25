@@ -68,7 +68,7 @@ export function readConfig(env = process.env) {
   const blogNavigationToken = env.BLOG_NAVIGATION_TOKEN || '';
   const username = env.AUTH_USERNAME || '';
   const password = env.AUTH_PASSWORD?.trim() || '';
-  const passwordLogin = booleanSetting(env, 'AUTH_PASSWORD_LOGIN', Boolean(username.trim() && password));
+  const passwordLogin = booleanSetting(env, 'AUTH_PASSWORD_LOGIN', false);
   const trustProxy = booleanSetting(env, 'TRUST_PROXY', false);
   const port = Number(env.PORT || 8787);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('PORT must be an integer from 0 to 65535.');

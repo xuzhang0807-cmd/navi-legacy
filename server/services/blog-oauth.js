@@ -2,7 +2,12 @@ import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } f
 import { equalSecret, opaqueId, sha256 } from './crypto.js';
 
 export const stateLifetime = 10 * 60;
-const scope = 'navi:manage';
+export const useScope = 'navi:use';
+export const manageScope = 'navi:manage';
+const scopePresets = {
+  use: useScope,
+  manage: `${useScope} ${manageScope}`,
+};
 const opaqueIdPattern = /^[A-Za-z0-9_-]{43}$/;
 const tokenPattern = /^[A-Za-z0-9._~+/-]+={0,2}$/;
 
@@ -41,6 +46,7 @@ export function createBlogOAuth(config, now, request) {
     try {
       const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
       if (!opaqueIdPattern.test(payload.state) || !opaqueIdPattern.test(payload.verifier)
+        || !Object.hasOwn(scopePresets, payload.requestedScope)
         || !Number.isSafeInteger(payload.expiresAt) || payload.expiresAt <= now()
         || !equalSecret(payload.state, returnedState)) return null;
       return payload;
@@ -97,16 +103,20 @@ export function createBlogOAuth(config, now, request) {
     return data;
   }
 
-  async function identity(accessToken) {
+  async function identity(accessToken, { requireManage = false } = {}) {
     const response = await send('/api/identity/me', {
       headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` },
     });
     const data = await readJson(response, true);
-    if (!Array.isArray(data?.scopes) || !data.scopes.includes(scope)) throw new BlogError('MISSING_PERMISSION');
+    if (!Array.isArray(data?.scopes)) throw new BlogError('MISSING_PERMISSION');
+    const hasManage = data.scopes.includes(manageScope);
+    const hasUse = data.scopes.includes(useScope);
+    if (requireManage ? !hasManage : (!hasUse && !hasManage)) throw new BlogError('MISSING_PERMISSION');
     if (typeof data.sub !== 'string' || !data.sub.trim() || typeof data.name !== 'string' || !data.name.trim()) {
       throw new BlogError('BLOG_UNAVAILABLE');
     }
-    return { subject: data.sub, name: data.name };
+    const blogRole = data.role === 'owner' || data.role === 'member' ? data.role : null;
+    return { subject: data.sub, name: data.name, role: hasManage ? 'admin' : 'viewer', blogRole };
   }
 
   async function revoke(refreshToken) {
@@ -119,11 +129,14 @@ export function createBlogOAuth(config, now, request) {
   }
 
   return {
-    start(returnTo) {
+    logoutUrl: `${oauth.issuer}/logout?${new URLSearchParams({ return_to: config.publicOrigin })}`,
+    start(returnTo, requestedScope = 'use') {
+      const scope = scopePresets[requestedScope];
+      if (!scope) throw new BlogError('INVALID_SCOPE');
       const state = opaqueId();
       const verifier = opaqueId();
       const encoded = Buffer.from(JSON.stringify({
-        state, verifier, returnTo: returnPath(returnTo, config.publicOrigin),
+        state, verifier, requestedScope, returnTo: returnPath(returnTo, config.publicOrigin),
         expiresAt: now() + stateLifetime * 1000,
       })).toString('base64url');
       const query = new URLSearchParams({
@@ -142,7 +155,7 @@ export function createBlogOAuth(config, now, request) {
       });
       try {
         return {
-          ...await identity(issued.access_token),
+          ...await identity(issued.access_token, { requireManage: flow.requestedScope === 'manage' }),
           refreshToken: issued.refresh_token,
           returnTo: returnPath(flow.returnTo, config.publicOrigin),
         };

@@ -12,7 +12,11 @@ const sessionHash = cookie => /^[A-Za-z0-9_-]{43}$/.test(cookie || '') ? sha256(
 
 export const guestViewer = Object.freeze({ role: 'guest', user: null });
 const unavailableViewer = Object.freeze({ ...guestViewer, blogUnavailable: true });
-const ownerViewer = (name, method) => ({ role: 'admin', user: { name, method } });
+const signedInViewer = (role, name, method, blogRole = null) => ({
+  role,
+  user: { name, method },
+  ...(blogRole ? { blogRole } : {}),
+});
 
 function passwordSessionFingerprint(config) {
   const key = hkdfSync('sha256', config.authSecret, '', 'navi:password-session:v1', 32);
@@ -22,6 +26,7 @@ function passwordSessionFingerprint(config) {
 
 export function requireOwner(viewer, write) {
   if (viewer.role === 'admin') return;
+  if (viewer.role === 'viewer') throw new HttpError(403, 'FORBIDDEN', '需要管理权限才能执行此操作');
   if (write && viewer.blogUnavailable) throw new HttpError(503, 'BLOG_UNAVAILABLE', '博客暂时无法验证会话');
   throw new HttpError(401, 'UNAUTHENTICATED', '请先登录');
 }
@@ -34,17 +39,22 @@ export function createAuthService(config, store, now, request) {
   const failures = new Map();
   let nextCleanup = 0;
 
-  function issue(method, name, duration, previousCookie, subject = null, refreshToken = null) {
+  function issue(method, name, duration, previousCookie, {
+    role = 'admin',
+    blogRole = null,
+    subject = null,
+    refreshToken = null,
+  } = {}) {
     const cookie = opaqueId();
     const hash = sessionHash(cookie);
     const time = now();
     store.replace({
-      hash, method, name, subject, expiresAt: time + duration * 1000,
+      hash, method, name, role, blogRole, subject, expiresAt: time + duration * 1000,
       refreshToken: refreshToken === null ? null : blog.encrypt(refreshToken, hash),
       verifiedAt: method === 'blog' ? time : null,
       passwordFingerprint: method === 'password' ? passwordFingerprint : null,
     }, sessionHash(previousCookie), time);
-    return { viewer: ownerViewer(name, method), cookie, duration };
+    return { viewer: signedInViewer(role, name, method, blogRole), cookie, duration };
   }
 
   async function recheck(session) {
@@ -64,12 +74,14 @@ export function createAuthService(config, store, now, request) {
         await blog.revoke(tokens.refresh_token);
         return guestViewer;
       }
-      const identity = await blog.identity(tokens.access_token);
+      const identity = await blog.identity(tokens.access_token, { requireManage: session.role === 'admin' });
       if (identity.subject !== session.subject) {
         store.remove(hash);
         return guestViewer;
       }
-      return store.confirm(hash, identity.name, now()) ? ownerViewer(identity.name, 'blog') : guestViewer;
+      return store.confirm(hash, identity.name, identity.role, identity.blogRole, now())
+        ? signedInViewer(identity.role, identity.name, 'blog', identity.blogRole)
+        : guestViewer;
     } catch (error) {
       const failure = blogFailure(error);
       if (!failure) throw error;
@@ -83,7 +95,14 @@ export function createAuthService(config, store, now, request) {
 
   return {
     describe(viewer) {
-      return { authenticated: viewer.role === 'admin', role: viewer.role, user: viewer.user, loginMethods };
+      return {
+        authenticated: viewer.role === 'admin' || viewer.role === 'viewer',
+        role: viewer.role,
+        user: viewer.user,
+        loginMethods,
+        ...(viewer.blogRole ? { blogRole: viewer.blogRole } : {}),
+        ...(blog ? { blogLogoutUrl: blog.logoutUrl } : {}),
+      };
     },
     login(body, ip, previousCookie) {
       if (!config.passwordLogin) throw new HttpError(403, 'PASSWORD_LOGIN_DISABLED', '密码登录未启用');
@@ -123,10 +142,12 @@ export function createAuthService(config, store, now, request) {
           store.remove(hash);
           return guestViewer;
         }
-        return ownerViewer(config.username, 'password');
+        return signedInViewer('admin', config.username, 'password');
       }
       if (!blog) return guestViewer;
-      if (time - session.verified_at < recheckInterval) return ownerViewer(session.user_name, 'blog');
+      if (time - session.verified_at < recheckInterval) {
+        return signedInViewer(session.role, session.user_name, 'blog', session.blog_role);
+      }
       let pending = refreshes.get(hash);
       if (!pending) {
         pending = recheck(session).finally(() => refreshes.delete(hash));
@@ -134,9 +155,10 @@ export function createAuthService(config, store, now, request) {
       }
       return pending;
     },
-    startBlog(returnTo) {
+    startBlog(returnTo, scope = 'use') {
       if (!blog) throw new HttpError(404, 'BLOG_LOGIN_DISABLED', '博客登录未配置');
-      return blog.start(returnTo);
+      if (scope !== 'use' && scope !== 'manage') throw new HttpError(400, 'INVALID_INPUT', '无效的授权范围参数');
+      return blog.start(returnTo, scope);
     },
     async finishBlog(flow, previousCookie) {
       if (!blog) return { location: '/?loginError=LOGIN_FAILED' };
@@ -144,7 +166,12 @@ export function createAuthService(config, store, now, request) {
       try {
         result = await blog.callback(flow);
         return {
-          ...issue('blog', result.name, extendedLifetime, previousCookie, result.subject, result.refreshToken),
+          ...issue('blog', result.name, extendedLifetime, previousCookie, {
+            role: result.role,
+            blogRole: result.blogRole,
+            subject: result.subject,
+            refreshToken: result.refreshToken,
+          }),
           location: result.returnTo,
         };
       } catch (error) {
